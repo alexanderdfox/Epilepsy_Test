@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Animated Gradient Squares</title>
+  <style>
+	body {
+	  margin: 0;
+	  height: 100vh;
+	  background-color: #f0f0f0;
+	  display: flex;
+	  flex-wrap: wrap;
+	  justify-content: center;
+	  align-items: center;
+	  overflow: hidden;
+	}
+	
+	.gradient-container {
+	  position: relative;
+	  width: 200px;
+	  height: 200px;
+	  background: 
+		linear-gradient(to bottom right, rgba(255, 0, 0, 0.5), rgba(255, 255, 0, 0.5), rgba(0, 255, 0, 0.5), rgba(0, 0, 255, 0.5)) repeat;
+	  background-size: 100px 100px;
+	  transform-origin: center;
+	  margin: 5px;
+	  animation: gradientAnimation 10s ease-in-out infinite, spin 1s ease-in-out infinite; /* Apply ease-in-out timing */
+	}
+	
+	.gradient-container::before {
+	  content: "";
+	  position: absolute;
+	  top: 0;
+	  left: 0;
+	  width: 100%;
+	  height: 100%;
+	  background: inherit;
+	  z-index: 1;
+	}
+	
+	/* Define the keyframes for gradient animation */
+	@keyframes gradientAnimation {
+	  0% {
+		background: linear-gradient(to bottom right, rgba(255, 0, 0, 0.5), rgba(255, 255, 0, 0.5), rgba(0, 255, 0, 0.5), rgba(0, 0, 255, 0.5));
+	  }
+	  50% {
+		background: linear-gradient(to bottom right, rgba(255, 0, 255, 0.5), rgba(0, 255, 255, 0.5), rgba(255, 255, 0, 0.5), rgba(0, 255, 0, 0.5));
+	  }
+	  100% {
+		background: linear-gradient(to bottom right, rgba(255, 0, 0, 0.5), rgba(255, 255, 0, 0.5), rgba(0, 255, 0, 0.5), rgba(0, 0, 255, 0.5));
+	  }
+	}
+	
+	/* Define the keyframes for spinning animation */
+	@keyframes spin {
+	  0% {
+		transform: rotate(0deg);
+	  }
+	  100% {
+		transform: rotate(360deg);
+	  }
+	}
+
+	/* Styles for the noscript fallback */
+	noscript {
+	  display: block;
+	  width: 100vw;
+	  height: 100vh;
+	  background-color: #ffffff;
+	  display: flex;
+	  justify-content: center;
+	  align-items: center;
+	  font-size: 24px;
+	  color: #000;
+	  text-align: center;
+	}
+  </style>
+</head>
+<body>
+  <script>
+	// Number of gradient containers to generate
+	const numContainers = 24;
+
+	// Function to create and append gradient containers
+	function createGradientContainers() {
+	  const body = document.body;
+	  for (let i = 0; i < numContainers; i++) {
+		const div = document.createElement('div');
+		div.className = 'gradient-container';
+
+		// Apply random rotation between 0 and 360 degrees
+		const rotation = Math.random() * 360;
+		div.style.transform = `rotate(${rotation}deg)`;
+
+		// Randomize spin direction (1 for clockwise, -1 for counter-clockwise)
+		const spinDirection = Math.random() < 0.5 ? 1 : -1;
+		div.style.animation += `, spin ${spinDirection} 1s ease-in-out infinite`;
+
+		body.appendChild(div);
+	  }
+	}
+
+	// Call the function to create gradient containers on page load
+	window.onload = createGradientContainers;
+  </script>
+
+  <noscript>
+	JavaScript is required to view this page. Please enable JavaScript to see the animated gradient squares.
+  </noscript>
+</body>
+</html>
