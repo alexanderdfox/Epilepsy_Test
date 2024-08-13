@@ -5,6 +5,48 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Animated Gradient Squares</title>
   <style>
+	/* Styles for the epilepsy warning overlay */
+	.overlay {
+	  position: fixed;
+	  top: 0;
+	  left: 0;
+	  width: 100vw;
+	  height: 100vh;
+	  background-color: #ffffff;
+	  display: flex;
+	  flex-direction: column;
+	  justify-content: center;
+	  align-items: center;
+	  font-size: 24px;
+	  color: #000;
+	  text-align: center;
+	  z-index: 1000; /* Ensure it's on top of everything else */
+	  transition: opacity 1s ease-in-out;
+	}
+
+	.overlay.hidden {
+	  opacity: 0;
+	  visibility: hidden;
+	}
+
+	/* Button styles */
+	.continue-button {
+	  margin-top: 20px;
+	  padding: 10px 20px;
+	  font-size: 16px;
+	  background-color: #007bff;
+	  color: #ffffff;
+	  border: none;
+	  border-radius: 5px;
+	  cursor: pointer;
+	  transition: background-color 0.3s ease;
+	}
+
+	.continue-button:hover {
+	  background-color: #0056b3;
+	}
+
+	/* Styles for the main content */
 	body {
 	  margin: 0;
 	  height: 100vh;
@@ -78,9 +120,27 @@
   </style>
 </head>
 <body>
+  <!-- Epilepsy warning overlay -->
+  <div class="overlay" id="overlay">
+	<p>
+	  **Warning:** This content may contain flashing lights, visual effects, or other stimuli that could potentially trigger seizures or other symptoms in individuals with epilepsy or related conditions. If you have a history of epilepsy or other health concerns, please consult with a healthcare professional before engaging with this content. If you experience any symptoms such as dizziness, nausea, or visual disturbances, stop viewing immediately and seek medical attention.
+	</p>
+	<button class="continue-button" id="continueButton">Continue</button>
+  </div>
+
+  <!-- Main content -->
   <script>
+	// Function to remove the overlay
+	function removeOverlay() {
+	  const overlay = document.getElementById('overlay');
+	  overlay.classList.add('hidden');
+	}
+
+	// Add event listener to the Continue button
+	document.getElementById('continueButton').addEventListener('click', removeOverlay);
+
 	// Number of gradient containers to generate
-	const numContainers = 24;
+	const numContainers = 1000;
 
 	// Function to create and append gradient containers
 	function createGradientContainers() {
