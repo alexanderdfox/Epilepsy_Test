@@ -1,172 +1,192 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Animated Gradient Squares</title>
-  <style>
-	/* Styles for the epilepsy warning overlay */
-	.overlay {
-	  position: fixed;
-	  top: 0;
-	  left: 0;
-	  width: 100vw;
-	  height: 100vh;
-	  background-color: #ffffff;
-	  display: flex;
-	  flex-direction: column;
-	  justify-content: center;
-	  align-items: center;
-	  font-size: 24px;
-	  color: #000;
-	  text-align: center;
-	  z-index: 1000; /* Ensure it's on top of everything else */
-	  transition: opacity 1s ease-in-out;
-	}
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Epilepsy Test</title>
+	<style>
+		body {
+			margin: 0;
+			display: grid;
+			gap: 0;
+			height: 100vh;
+			width: 100vw;
+			overflow: hidden;
+			background: lightblue;
+		}
 
-	.overlay.hidden {
-	  opacity: 0;
-	  visibility: hidden;
-	}
+		.spin-container {
+			position: relative;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+		}
 
-	/* Button styles */
-	.continue-button {
-	  margin-top: 20px;
-	  padding: 10px 20px;
-	  font-size: 16px;
-	  background-color: #007bff;
-	  color: #ffffff;
-	  border: none;
-	  border-radius: 5px;
-	  cursor: pointer;
-	  transition: background-color 0.3s ease;
-	}
+		.spinA, .spinZ {
+			width: 100%;
+			height: 100%;
+			position: absolute;
+			background-size: cover;
+			border-radius: 120px;
+		}
 
-	.continue-button:hover {
-	  background-color: #0056b3;
-	}
+		.spinA {
+			top: -100px;
+			left: -100px;
+			background: linear-gradient(to right, 
+				#FF0000, /* Red */
+				#FF7F00, /* Orange */
+				#FFFF00, /* Yellow */
+				#00FF00, /* Green */
+				#00FFFF, /* Cyan */
+				#0000FF, /* Blue */
+				#8B00FF, /* Violet */
+				#FF00FF, /* Magenta */
+				#FF0000  /* Red */
+			);
+			animation: spinA 2s linear infinite, changeGradient 10s linear infinite;
+			opacity: 50%;
+		}
 
-	/* Styles for the main content */
-	body {
-	  margin: 0;
-	  height: 100vh;
-	  background-color: #f0f0f0;
-	  display: flex;
-	  flex-wrap: wrap;
-	  justify-content: center;
-	  align-items: center;
-	  overflow: hidden;
-	}
-	
-	.gradient-container {
-	  position: relative;
-	  width: 200px;
-	  height: 200px;
-	  background: 
-		linear-gradient(to bottom right, rgba(255, 0, 0, 0.5), rgba(255, 255, 0, 0.5), rgba(0, 255, 0, 0.5), rgba(0, 0, 255, 0.5)) repeat;
-	  background-size: 100px 100px;
-	  transform-origin: center;
-	  margin: 5px;
-	  animation: gradientAnimation 10s ease-in-out infinite, spin 1s ease-in-out infinite; /* Apply ease-in-out timing */
-	}
-	
-	.gradient-container::before {
-	  content: "";
-	  position: absolute;
-	  top: 0;
-	  left: 0;
-	  width: 100%;
-	  height: 100%;
-	  background: inherit;
-	  z-index: 1;
-	}
-	
-	/* Define the keyframes for gradient animation */
-	@keyframes gradientAnimation {
-	  0% {
-		background: linear-gradient(to bottom right, rgba(255, 0, 0, 0.5), rgba(255, 255, 0, 0.5), rgba(0, 255, 0, 0.5), rgba(0, 0, 255, 0.5));
-	  }
-	  50% {
-		background: linear-gradient(to bottom right, rgba(255, 0, 255, 0.5), rgba(0, 255, 255, 0.5), rgba(255, 255, 0, 0.5), rgba(0, 255, 0, 0.5));
-	  }
-	  100% {
-		background: linear-gradient(to bottom right, rgba(255, 0, 0, 0.5), rgba(255, 255, 0, 0.5), rgba(0, 255, 0, 0.5), rgba(0, 0, 255, 0.5));
-	  }
-	}
-	
-	/* Define the keyframes for spinning animation */
-	@keyframes spin {
-	  0% {
-		transform: rotate(0deg);
-	  }
-	  100% {
-		transform: rotate(360deg);
-	  }
-	}
+		.spinZ {
+			background: linear-gradient(to right, 
+				#FF0000, /* Red (original end) */
+				#FF00FF, /* Magenta */
+				#8B00FF, /* Violet */
+				#0000FF, /* Blue */
+				#00FFFF, /* Cyan */
+				#00FF00, /* Green */
+				#FFFF00, /* Yellow */
+				#FF7F00, /* Orange */
+				#FF0000  /* Red (original start) */
+			);
+			animation: spinZ 2s linear infinite, changeGradientInverted 10s linear infinite;
+			opacity: 50%;
+		}
 
-	/* Styles for the noscript fallback */
-	noscript {
-	  display: block;
-	  width: 100vw;
-	  height: 100vh;
-	  background-color: #ffffff;
-	  display: flex;
-	  justify-content: center;
-	  align-items: center;
-	  font-size: 24px;
-	  color: #000;
-	  text-align: center;
-	}
-  </style>
+		@keyframes spinZ {
+			from {
+				transform: rotate(0deg);
+			}
+			to {
+				transform: rotate(360deg);
+			}
+		}
+
+		@keyframes spinA {
+			from {
+				transform: rotate(360deg);
+			}
+			to {
+				transform: rotate(0deg);
+			}
+		}
+
+		@keyframes changeGradient {
+			0% {
+				background: linear-gradient(to right, 
+					#FF0000, #FF7F00, #FFFF00, #00FF00, #00FFFF, #0000FF, #8B00FF, #FF00FF, #FF0000);
+			}
+			50% {
+				background: linear-gradient(to right, 
+					#FF00FF, #8B00FF, #0000FF, #00FFFF, #00FF00, #FFFF00, #FF7F00, #FF0000, #FF00FF);
+			}
+			100% {
+				background: linear-gradient(to right, 
+					#FF0000, #FF7F00, #FFFF00, #00FF00, #00FFFF, #0000FF, #8B00FF, #FF00FF, #FF0000);
+			}
+		}
+
+		@keyframes changeGradientInverted {
+			0% {
+				background: linear-gradient(to right, 
+					#FF0000, #FF00FF, #8B00FF, #0000FF, #00FFFF, #00FF00, #FFFF00, #FF7F00, #FF0000);
+			}
+			50% {
+				background: linear-gradient(to right, 
+					#FF00FF, #FF7F00, #FFFF00, #00FF00, #00FFFF, #0000FF, #8B00FF, #FF0000, #FF00FF);
+			}
+			100% {
+				background: linear-gradient(to right, 
+					#FF0000, #FF00FF, #8B00FF, #0000FF, #00FFFF, #00FF00, #FFFF00, #FF7F00, #FF0000);
+			}
+		}
+
+		/* Intro overlay styles */
+		.overlay {
+			position: fixed;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			background-color: rgba(0, 0, 0, 0.8);
+			color: white;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			text-align: center;
+			flex-direction: column;
+			z-index: 10;
+		}
+
+		.overlay p {
+			font-size: 1.5em;
+			margin: 20px;
+			max-width: 80%;
+		}
+
+		.overlay button {
+			padding: 10px 20px;
+			font-size: 1.2em;
+			cursor: pointer;
+		}
+	</style>
 </head>
 <body>
-  <!-- Epilepsy warning overlay -->
-  <div class="overlay" id="overlay">
-	<p>
-	  **Warning:** This content may contain flashing lights, visual effects, or other stimuli that could potentially trigger seizures or other symptoms in individuals with epilepsy or related conditions. If you have a history of epilepsy or other health concerns, please consult with a healthcare professional before engaging with this content. If you experience any symptoms such as dizziness, nausea, or visual disturbances, stop viewing immediately and seek medical attention.
-	</p>
-	<button class="continue-button" id="continueButton">Continue</button>
-  </div>
+	<div class="overlay" id="overlay">
+		<p>
+			**Warning:** This content may contain flashing lights, visual effects, or other stimuli that could potentially trigger seizures or other symptoms in individuals with epilepsy or related conditions. If you have a history of epilepsy or other health concerns, please consult with a healthcare professional before engaging with this content. If you experience any symptoms such as dizziness, nausea, or visual disturbances, stop viewing immediately and seek medical attention.
+		</p>
+		<button id="continueButton">Continue</button>
+	</div>
 
-  <!-- Main content -->
-  <script>
-	// Function to remove the overlay
-	function removeOverlay() {
-	  const overlay = document.getElementById('overlay');
-	  overlay.classList.add('hidden');
-	}
+	<script>
+		// Function to remove the overlay and show the spinning grid
+		document.getElementById('continueButton').onclick = function() {
+			document.getElementById('overlay').style.display = 'none';
 
-	// Add event listener to the Continue button
-	document.getElementById('continueButton').addEventListener('click', removeOverlay);
+			// Set the size of each grid cell
+			const cellSize = 200;
 
-	// Number of gradient containers to generate
-	const numContainers = 1000;
+			// Get the number of columns and rows needed to fill the screen
+			const cols = Math.ceil(window.innerWidth / cellSize);
+			const rows = Math.ceil(window.innerHeight / cellSize);
 
-	// Function to create and append gradient containers
-	function createGradientContainers() {
-	  const body = document.body;
-	  for (let i = 0; i < numContainers; i++) {
-		const div = document.createElement('div');
-		div.className = 'gradient-container';
+			// Set the grid template columns and rows on the body
+			document.body.style.gridTemplateColumns = `repeat(${cols}, ${cellSize}px)`;
+			document.body.style.gridTemplateRows = `repeat(${rows}, ${cellSize}px)`;
 
-		// Apply random rotation between 0 and 360 degrees
-		const rotation = Math.random() * 360;
-		div.style.transform = `rotate(${rotation}deg)`;
+			// Function to create a spin container
+			function createSpinContainer() {
+				const container = document.createElement('div');
+				container.className = 'spin-container';
 
-		// Randomize spin direction (1 for clockwise, -1 for counter-clockwise)
-		const spinDirection = Math.random() < 0.5 ? 1 : -1;
-		div.style.animation += `, spin ${spinDirection} 1s ease-in-out infinite`;
+				const spinZ = document.createElement('div');
+				spinZ.className = 'spinZ';
+				container.appendChild(spinZ);
 
-		body.appendChild(div);
-	  }
-	}
+				const spinA = document.createElement('div');
+				spinA.className = 'spinA';
+				container.appendChild(spinA);
 
-	// Call the function to create gradient containers on page load
-	window.onload = createGradientContainers;
-  </script>
+				return container;
+			}
 
-  <noscript>
-	JavaScript is required to view this page. Please enable JavaScript to see the animated gradient squares.
-  </noscript>
+			// Create and append the grid cells
+			for (let i = 0; i < cols * rows; i++) {
+				document.body.appendChild(createSpinContainer());
+			}
+		}
+	</script>
 </body>
 </html>
