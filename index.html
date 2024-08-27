@@ -140,6 +140,29 @@
 			font-size: 1.2em;
 			cursor: pointer;
 		}
+
+		/* Unsupported browser message styles */
+		.unsupported-message {
+			position: fixed;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			background-color: rgba(0, 0, 0, 0.8);
+			color: white;
+			display: none;
+			justify-content: center;
+			align-items: center;
+			text-align: center;
+			flex-direction: column;
+			z-index: 20;
+		}
+
+		.unsupported-message p {
+			font-size: 2em;
+			margin: 20px;
+			max-width: 80%;
+		}
 	</style>
 </head>
 <body>
@@ -147,44 +170,69 @@
 		<p>
 			**Warning:** This content may contain flashing lights, visual effects, or other stimuli that could potentially trigger seizures or other symptoms in individuals with epilepsy or related conditions. If you have a history of epilepsy or other health concerns, please consult with a healthcare professional before engaging with this content. If you experience any symptoms such as dizziness, nausea, or visual disturbances, stop viewing immediately and seek medical attention.
 		</p>
+		<p>
+			THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+		</p>
 		<button id="continueButton">Continue</button>
 	</div>
 
+	<div class="unsupported-message" id="unsupportedMessage">
+		<p>Your browser does not support the required features to view this content. Please use a modern browser such as Chrome, Firefox, or Edge.</p>
+	</div>
+
 	<script>
-		// Function to remove the overlay and show the spinning grid
-		document.getElementById('continueButton').onclick = function() {
-			document.getElementById('overlay').style.display = 'none';
-
-			// Set the size of each grid cell
-			const cellSize = 200;
-
-			// Get the number of columns and rows needed to fill the screen
-			const cols = Math.ceil(window.innerWidth / cellSize);
-			const rows = Math.ceil(window.innerHeight / cellSize);
-
-			// Set the grid template columns and rows on the body
-			document.body.style.gridTemplateColumns = `repeat(${cols}, ${cellSize}px)`;
-			document.body.style.gridTemplateRows = `repeat(${rows}, ${cellSize}px)`;
-
-			// Function to create a spin container
-			function createSpinContainer() {
-				const container = document.createElement('div');
-				container.className = 'spin-container';
-
-				const spinZ = document.createElement('div');
-				spinZ.className = 'spinZ';
-				container.appendChild(spinZ);
-
-				const spinA = document.createElement('div');
-				spinA.className = 'spinA';
-				container.appendChild(spinA);
-
-				return container;
+		// Feature detection for unsupported browsers
+		function isBrowserSupported() {
+			// Example checks for ES6 features, CSS grid, and other modern features
+			try {
+				return typeof Symbol !== "undefined" && 
+					typeof Proxy !== "undefined" &&
+					CSS.supports("display", "grid");
+					CSS.supports("animation", "1s ease-in-out infinite");
+			} catch (e) {
+				return false;
 			}
+		}
 
-			// Create and append the grid cells
-			for (let i = 0; i < cols * rows; i++) {
-				document.body.appendChild(createSpinContainer());
+		// Show a message for unsupported browsers
+		if (!isBrowserSupported()) {
+			document.getElementById('unsupportedMessage').style.display = 'flex';
+			document.getElementById('overlay').style.display = 'none';
+		} else {
+			document.getElementById('continueButton').onclick = function() {
+				document.getElementById('overlay').style.display = 'none';
+
+				// Set the size of each grid cell
+				const cellSize = 200;
+
+				// Get the number of columns and rows needed to fill the screen
+				const cols = Math.ceil(window.innerWidth / cellSize);
+				const rows = Math.ceil(window.innerHeight / cellSize);
+
+				// Set the grid template columns and rows on the body
+				document.body.style.gridTemplateColumns = `repeat(${cols}, ${cellSize}px)`;
+				document.body.style.gridTemplateRows = `repeat(${rows}, ${cellSize}px)`;
+
+				// Function to create a spin container
+				function createSpinContainer() {
+					const container = document.createElement('div');
+					container.className = 'spin-container';
+
+					const spinZ = document.createElement('div');
+					spinZ.className = 'spinZ';
+					container.appendChild(spinZ);
+
+					const spinA = document.createElement('div');
+					spinA.className = 'spinA';
+					container.appendChild(spinA);
+
+					return container;
+				}
+
+				// Create and append the grid cells
+				for (let i = 0; i < cols * rows; i++) {
+					document.body.appendChild(createSpinContainer());
+				}
 			}
 		}
 	</script>
