@@ -108,7 +108,9 @@
 		const centerY = HEIGHT / 2;
 
 		const GOLD = 'rgb(255, 215, 0)';
-		const SNAKE_COLOR = 'rgb(50, 150, 0)';
+		
+		let scale = 1; // Scale factor for the zoom effect
+		let scaleIncrement = 0.01; // Speed of zooming
 		
 		// Fibonacci Sequence
 		function fibonacci(n) {
@@ -119,20 +121,30 @@
 			return fibSequence;
 		}
 
-		// Draw Fibonacci Spiral
+		// Draw Fibonacci Spiral with zoom effect
 		function drawFibonacciSpiral() {
 			const fibNumbers = fibonacci(20);
 			let angle = 0;
 
+			ctx.save();
+			ctx.translate(centerX, centerY);
+			ctx.scale(scale, scale);
+
 			for (let i = 2; i < fibNumbers.length; i++) {
 				let radius = fibNumbers[i] * 10;
 				ctx.beginPath();
-				ctx.arc(centerX, centerY, radius, angle, angle + Math.PI / 2);
+				ctx.arc(0, 0, radius, angle, angle + Math.PI / 2);
 				ctx.lineWidth = 3;
 				ctx.strokeStyle = GOLD;
 				ctx.stroke();
 				angle += Math.PI / 2;
 			}
+
+			ctx.restore();
+
+			// Increase scale for zoom effect
+			scale += scaleIncrement;
+			if (scale > 3 || scale < 1) scaleIncrement *= -1; // Reverse direction at limits
 		}
 
 		// Snake Class
