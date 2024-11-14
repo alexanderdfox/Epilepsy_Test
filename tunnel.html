@@ -113,9 +113,16 @@
 			document.getElementById('canvas5')
 		];
 
-		const GOLD = 'rgb(255, 215, 0)';
 		let scale = 1;
 		let scaleIncrement = 0.01;
+
+		// Function to generate random color
+		function getRandomColor() {
+			const r = Math.floor(Math.random() * 256);
+			const g = Math.floor(Math.random() * 256);
+			const b = Math.floor(Math.random() * 256);
+			return `rgb(${r}, ${g}, ${b})`;
+		}
 
 		// Setup and draw function for each canvas
 		function setupCanvas(canvas) {
@@ -148,7 +155,7 @@
 					ctx.beginPath();
 					ctx.arc(0, 0, radius, angle, 360);
 					ctx.lineWidth = 3;
-					ctx.strokeStyle = GOLD;
+					ctx.strokeStyle = getRandomColor(); // Use a random color for each spiral
 					ctx.stroke();
 					angle += Math.PI / 2;
 				}
