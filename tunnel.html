@@ -5,7 +5,6 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Tunnel Vision</title>
 	<style>
-		/* General styles */
 		body {
 			margin: 0;
 			padding: 0;
@@ -14,11 +13,7 @@
 			font-family: Arial, sans-serif;
 		}
 
-		canvas {
-			display: block;
-		}
-
-		/* Warning screen styles */
+		/* Style for the warning screen */
 		#warning {
 			position: fixed;
 			top: 0;
@@ -55,28 +50,40 @@
 			background-color: #ff4500;
 		}
 
-		/* Keyframes for spinning and oscillating like a DJ turntable */
-		@keyframes spinOscillate {
-			0% {
-				transform: rotate(0deg);
-			}
-			25% {
-				transform: rotate(90deg);
-			}
-			50% {
-				transform: rotate(180deg);
-			}
-			75% {
-				transform: rotate(270deg);
-			}
-			100% {
-				transform: rotate(360deg);
-			}
+		/* Spinner shape layout with rotation animation */
+		.spinner {
+			position: fixed;
+			overflow: hidden;
+			display: none;
 		}
 
-		/* Main animation after warning */
-		#main-content {
-			display: none;
+		.spinner.top-left { top: 0; left: 0; width: 50%; height: 50%; transform: rotate(-30deg); animation: spin-cc 0.1s ease-in-out infinite; }
+		.spinner.top-right { top: 0; right: 0; width: 50%; height: 50%; transform: rotate(30deg); animation: spin-cc 0.1s ease-in-out infinite; }
+		.spinner.bottom-left { bottom: 0; left: 0; width: 50%; height: 50%; transform: rotate(30deg); animation: spin-cc 0.1s ease-in-out infinite; }
+		.spinner.bottom-right { bottom: 0; right: 0; width: 50%; height: 50%; transform: rotate(-30deg); animation: spin-cc 0.1s ease-in-out infinite; }
+		.spinner.center-middle {
+		  top: 25%;
+		  left: 25%;
+		  width: 50%;
+		  height: 50%;
+		  transform: translate(50%, 50%) rotate(-30deg);
+		  animation: spin-ccw 0.1s ease-in-out infinite;
+		}
+
+		/* Rotate the spinner elements at 1 rotation per second */
+		@keyframes spin-cc {
+			from { transform: rotate(0deg); }
+			to { transform: rotate(360deg); }
+		}
+
+		@keyframes spin-ccw {
+			from { transform: rotate(360deg); }
+			to { transform: rotate(0deg); }
+		}
+
+		canvas {
+			width: 100%;
+			height: 100%;
 		}
 	</style>
 </head>
@@ -90,121 +97,84 @@
 		<button id="continue-btn">Continue</button>
 	</div>
 
-	<!-- Main content with animation -->
-	<div id="main-content">
-		<canvas id="screensaver"></canvas>
-	</div>
+	<!-- Fidget spinner layout with five canvases -->
+	<div class="spinner top-left"><canvas id="canvas1"></canvas></div>
+	<div class="spinner top-right"><canvas id="canvas2"></canvas></div>
+	<div class="spinner bottom-left"><canvas id="canvas3"></canvas></div>
+	<div class="spinner bottom-right"><canvas id="canvas4"></canvas></div>
+	<div class="spinner center-middle"><canvas id="canvas5"></canvas></div>
 
 	<script>
-		// Set up the canvas
-		const canvas = document.getElementById('screensaver');
-		const ctx = canvas.getContext('2d');
-		const WIDTH = window.innerWidth;
-		const HEIGHT = window.innerHeight;
-		canvas.width = WIDTH;
-		canvas.height = HEIGHT;
-
-		const centerX = WIDTH / 2;
-		const centerY = HEIGHT / 2;
+		const canvasElements = [
+			document.getElementById('canvas1'),
+			document.getElementById('canvas2'),
+			document.getElementById('canvas3'),
+			document.getElementById('canvas4'),
+			document.getElementById('canvas5')
+		];
 
 		const GOLD = 'rgb(255, 215, 0)';
-		
-		let scale = 1; // Scale factor for the zoom effect
-		let scaleIncrement = 0.01; // Speed of zooming
-		
-		// Fibonacci Sequence
-		function fibonacci(n) {
-			let fibSequence = [0, 1];
-			for (let i = 2; i < n; i++) {
-				fibSequence.push(fibSequence[i - 1] + fibSequence[i - 2]);
-			}
-			return fibSequence;
-		}
+		let scale = 1;
+		let scaleIncrement = 0.01;
 
-		// Draw Fibonacci Spiral with zoom effect
-		function drawFibonacciSpiral() {
-			const fibNumbers = fibonacci(20);
-			let angle = 0;
+		// Setup and draw function for each canvas
+		function setupCanvas(canvas) {
+			const ctx = canvas.getContext('2d');
+			canvas.width = canvas.clientWidth;
+			canvas.height = canvas.clientHeight;
 
-			ctx.save();
-			ctx.translate(centerX, centerY);
-			ctx.scale(scale, scale);
+			const centerX = canvas.width / 2;
+			const centerY = canvas.height / 2;
 
-			for (let i = 2; i < fibNumbers.length; i++) {
-				let radius = fibNumbers[i] * 10;
-				ctx.beginPath();
-				ctx.arc(0, 0, radius, angle, angle + Math.PI / 2);
-				ctx.lineWidth = 3;
-				ctx.strokeStyle = GOLD;
-				ctx.stroke();
-				angle += Math.PI / 2;
+			function fibonacci(n) {
+				let fibSequence = [0, 1];
+				for (let i = 2; i < n; i++) {
+					fibSequence.push(fibSequence[i - 1] + fibSequence[i - 2]);
+				}
+				return fibSequence;
 			}
 
-			ctx.restore();
+			function drawFibonacciSpiral() {
+				const fibNumbers = fibonacci(20);
+				let angle = 0;
 
-			// Increase scale for zoom effect
-			scale += scaleIncrement;
-			if (scale > 3 || scale < 1) scaleIncrement *= -1; // Reverse direction at limits
-		}
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+				ctx.save();
+				ctx.translate(centerX, centerY);
+				ctx.scale(scale, scale);
 
-		// Snake Class
-		class Snake {
-			constructor(x, y) {
-				this.x = x;
-				this.y = y;
-				this.angle = Math.random() * 2 * Math.PI;
-				this.length = Math.floor(Math.random() * 100) + 50;
-				this.speed = Math.random() * 2 + 1;
-				this.color = `rgb(${Math.floor(Math.random() * 100) + 50}, ${Math.floor(Math.random() * 100) + 50}, 0)`;
+				for (let i = 2; i < fibNumbers.length; i++) {
+					let radius = fibNumbers[i] * 10;
+					ctx.beginPath();
+					ctx.arc(0, 0, radius, angle, 360);
+					ctx.lineWidth = 3;
+					ctx.strokeStyle = GOLD;
+					ctx.stroke();
+					angle += Math.PI / 2;
+				}
+
+				ctx.restore();
+				scale += scaleIncrement;
+				if (scale > 3 || scale < 1) scaleIncrement *= -1;
 			}
 
-			move() {
-				this.x += Math.cos(this.angle) * this.speed;
-				this.y += Math.sin(this.angle) * this.speed;
-				this.angle += Math.random() * 0.1 - 0.05;  // Erratic movement
-				
-				if (this.x < 0 || this.x > WIDTH) this.x = Math.random() * WIDTH;
-				if (this.y < 0 || this.y > HEIGHT) this.y = Math.random() * HEIGHT;
+			function animate() {
+				drawFibonacciSpiral();
+				requestAnimationFrame(animate);
 			}
 
-			draw() {
-				ctx.beginPath();
-				ctx.arc(this.x, this.y, 5, 0, 2 * Math.PI);
-				ctx.fillStyle = this.color;
-				ctx.fill();
-			}
-		}
-
-		// Create multiple snakes
-		const snakes = [];
-		for (let i = 0; i < 10; i++) {
-			snakes.push(new Snake(Math.random() * WIDTH, Math.random() * HEIGHT));
-		}
-
-		// Main loop
-		function animate() {
-			ctx.clearRect(0, 0, WIDTH, HEIGHT);
-
-			drawFibonacciSpiral();
-
-			// Move and draw snakes
-			for (let snake of snakes) {
-				snake.move();
-				snake.draw();
-			}
-
-			requestAnimationFrame(animate);
+			animate();
 		}
 
 		// Show animation after clicking "Continue"
 		document.getElementById('continue-btn').addEventListener('click', function() {
-			// Hide warning and show the main content
 			document.getElementById('warning').style.display = 'none';
-			document.getElementById('main-content').style.display = 'block';
 
-			// Start the spinning and oscillating effect
-			document.body.style.animation = 'spinOscillate 0.1s ease-in-out infinite';  // Start spinning effect
-			animate();  // Start the animation after the warning
+			const spinners = document.querySelectorAll('.spinner');
+			spinners.forEach(spinner => spinner.style.display = 'block');
+
+			// Initialize each canvas
+			canvasElements.forEach(canvas => setupCanvas(canvas));
 		});
 	</script>
 </body>
