@@ -9,47 +9,43 @@ struct ContentView: View {
 
     var body: some View {
         GeometryReader { geometry in
+            // White background layer
+            Color.white
             ZStack {
                 // Calculate the number of columns and rows based on the tile size
-                let columns = Int(geometry.size.width / tileSize) + 2
-                let rows = Int(geometry.size.height / tileSize) + 2
+                let columns = Int(geometry.size.width / tileSize) + 3 // +3 ensures coverage on the right edge
+                let rows = Int(geometry.size.height / tileSize) + 3 // +3 ensures enough rows for vertical coverage
 
-                // We extract the ForEach into separate variables for clarity
-                let gridItems = (0..<rows).flatMap { row in
-                    (0..<columns).map { column in
-                        TilePosition(
-                            column: column,
-                            row: row,
-                            offsetX: CGFloat(column) * tileSize - (tileSize),
-                            offsetY: CGFloat(row) * tileSize - (tileSize)
+                // Generate grid items
+                ForEach(0..<rows, id: \.self) { row in
+                    ForEach(0..<columns, id: \.self) { column in
+                        let offsetX = CGFloat(column) * tileSize - tileSize
+                        let offsetY = CGFloat(row) * tileSize - tileSize
+                        let randomSpinDirection = Bool.random()
+
+                        SingleCircleView(
+                            spinA: $spinA,
+                            spinZ: $spinZ,
+                            randomSpinDirection: randomSpinDirection,
+                            tileSize: $tileSize,
+                            layerOffsetX: $layerOffsetX,
+                            layerOffsetY: $layerOffsetY
+                        )
+                        .frame(width: tileSize, height: tileSize)
+                        .offset(
+                            x: offsetX + (row.isMultiple(of: 2) ? 0 : -tileSize), // Stagger every other row
+                            y: offsetY
                         )
                     }
                 }
-                
-                // Tile the screen
-                ForEach(gridItems, id: \.self) { item in
-                    let randomSpinDirection = Bool.random()
-
-                    SingleCircleView(spinA: $spinA, spinZ: $spinZ, randomSpinDirection: randomSpinDirection, tileSize: $tileSize, layerOffsetX: $layerOffsetX, layerOffsetY: $layerOffsetY)
-                        .frame(width: tileSize, height: tileSize)
-                        .offset(x: item.offsetX + (item.row.isMultiple(of: 2) ? 0 : -tileSize), y: item.offsetY)
-                }
             }
             .onAppear {
-                spinA.toggle()
-                spinZ.toggle()
+                spinA = true
+                spinZ = true
             }
-            .ignoresSafeArea() // Make sure the content spans the entire screen
         }
         .edgesIgnoringSafeArea(.all) // Ensure full-screen display without any safe area padding
     }
-}
-
-struct TilePosition: Hashable {
-    let column: Int
-    let row: Int
-    let offsetX: CGFloat
-    let offsetY: CGFloat
 }
 
 struct SingleCircleView: View {
@@ -62,7 +58,7 @@ struct SingleCircleView: View {
 
     var body: some View {
         ZStack {
-            // Only One Spin Layer
+            // First spinning layer
             Circle()
                 .fill(AngularGradient(
                     gradient: Gradient(colors: [
@@ -72,13 +68,13 @@ struct SingleCircleView: View {
                 ))
                 .rotationEffect(.degrees(spinA ? 360 : 0))
                 .animation(
-                    Animation.easeInOut(duration: 1)
+                    Animation.easeInOut(duration: 2)
                         .repeatForever(autoreverses: false),
                     value: spinA
                 )
                 .opacity(0.5)
 
-            // Apply dynamic offset for the single layer
+            // Second spinning layer with dynamic offset
             Circle()
                 .fill(AngularGradient(
                     gradient: Gradient(colors: [
@@ -86,14 +82,14 @@ struct SingleCircleView: View {
                     ]),
                     center: .center
                 ))
-                .rotationEffect(.degrees(randomSpinDirection ? -360 : 360))
+                .rotationEffect(.degrees(spinZ ? -360 : 0))
                 .animation(
-                    Animation.easeInOut(duration: 1)
+                    Animation.easeInOut(duration: 2)
                         .repeatForever(autoreverses: false),
                     value: spinZ
                 )
                 .opacity(0.5)
-                .offset(x: layerOffsetX, y: layerOffsetY) // Apply dynamic offset based on state
+                .offset(x: layerOffsetX, y: layerOffsetY)
         }
     }
 }
