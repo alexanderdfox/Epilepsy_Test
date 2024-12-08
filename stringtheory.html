@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+	<title>String Theory Animation with 3D Hypercube Cursor</title>
+	<style>
+		body, html {
+			margin: 0;
+			padding: 0;
+			height: 100%;
+			background-color: black;
+			overflow: hidden;
+			cursor: none; /* Hide the default cursor */
+			touch-action: none; /* Prevent default touch behavior */
+		}
+
+		canvas {
+			display: block;
+			width: 100%;
+			height: 100%;
+			background-color: black;
+		}
+	</style>
+</head>
+<body>
+	<canvas id="stringCanvas"></canvas>
+
+	<script>
+		// Canvas setup
+		const canvas = document.getElementById('stringCanvas');
+		const ctx = canvas.getContext('2d');
+		canvas.width = window.innerWidth;
+		canvas.height = window.innerHeight;
+
+		// Constants for strings
+		const numStrings = 50;
+		const stringLength = 100;
+		const maxAmplitude = 50;
+		let focalLength = 400;
+
+		// Array to hold strings
+		let strings = generateStrings();
+
+		// Rotation angles
+		let rotationAngleX = 0;
+		let rotationAngleY = 0;
+		let rotationAngleZ = 0;
+
+		// Mouse and touch position
+		let mouseX = canvas.width / 2;
+		let mouseY = canvas.height / 2;
+
+		// Hypercube settings
+		let hypercubeRotation = 0;
+		const hypercubeSize = 50;
+		const innerHypercubeSize = 25;
+
+		// Interaction variables
+		let isDragging = false;
+		let lastMouseX = 0;
+		let lastMouseY = 0;
+		let pinchStartDistance = 0;
+		let pinchStartFocalLength = focalLength;
+
+		// Function to generate initial strings
+		function generateStrings() {
+			const strings = [];
+			for (let i = 0; i < numStrings; i++) {
+				let string = [];
+				for (let j = 0; j < stringLength; j++) {
+					string.push({
+						x: (Math.random() - 0.5) * canvas.width,
+						y: (Math.random() - 0.5) * canvas.height,
+						z: (Math.random() - 0.5) * 1000,
+						phase: Math.random() * Math.PI * 2
+					});
+				}
+				strings.push(string);
+			}
+			return strings;
+		}
+
+		// Function to rotate a point in 3D
+		function rotatePoint(point, angleX, angleY, angleZ) {
+			let { x, y, z } = point;
+
+			// Rotate around X-axis
+			let tempY = y * Math.cos(angleX) - z * Math.sin(angleX);
+			let tempZ = y * Math.sin(angleX) + z * Math.cos(angleX);
+			y = tempY;
+			z = tempZ;
+
+			// Rotate around Y-axis
+			let tempX = x * Math.cos(angleY) + z * Math.sin(angleY);
+			tempZ = -x * Math.sin(angleY) + z * Math.cos(angleY);
+			x = tempX;
+			z = tempZ;
+
+			// Rotate around Z-axis
+			tempX = x * Math.cos(angleZ) - y * Math.sin(angleZ);
+			tempY = x * Math.sin(angleZ) + y * Math.cos(angleZ);
+			x = tempX;
+			y = tempY;
+
+			return { x, y, z };
+		}
+
+		// Function to project 3D point to 2D
+		function project(point) {
+			const scale = focalLength / (focalLength + point.z);
+			return {
+				x: canvas.width / 2 + point.x * scale,
+				y: canvas.height / 2 + point.y * scale
+			};
+		}
+
+		// Draw function
+		function draw() {
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+			ctx.strokeStyle = 'rgba(0, 255, 255, 0.7)';
+
+			strings.forEach(string => {
+				ctx.beginPath();
+				for (let i = 0; i < string.length; i++) {
+					string[i].y += Math.sin(string[i].phase + Date.now() * 0.002) * maxAmplitude * 0.01;
+					string[i].phase += 0.05;
+
+					const rotatedPoint = rotatePoint(string[i], rotationAngleX, rotationAngleY, rotationAngleZ);
+					const projectedPoint = project(rotatedPoint);
+
+					if (i === 0) {
+						ctx.moveTo(projectedPoint.x, projectedPoint.y);
+					} else {
+						ctx.lineTo(projectedPoint.x, projectedPoint.y);
+					}
+				}
+				ctx.stroke();
+			});
+
+			drawHypercube(mouseX-(canvas.width/2), mouseY-(canvas.height/2)); // Use mouse position for the hypercube
+
+			requestAnimationFrame(draw);
+		}
+
+		// Function to draw a 3D hypercube as the cursor
+		function drawHypercube(x, y) {
+			ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
+			const outerSize = hypercubeSize;
+			const innerSize = innerHypercubeSize;
+
+			// Define the points of the outer and inner cubes
+			const outerPoints = [
+				{ x: -outerSize, y: -outerSize, z: -outerSize },
+				{ x: outerSize, y: -outerSize, z: -outerSize },
+				{ x: outerSize, y: outerSize, z: -outerSize },
+				{ x: -outerSize, y: outerSize, z: -outerSize },
+				{ x: -outerSize, y: -outerSize, z: outerSize },
+				{ x: outerSize, y: -outerSize, z: outerSize },
+				{ x: outerSize, y: outerSize, z: outerSize },
+				{ x: -outerSize, y: outerSize, z: outerSize }
+			];
+
+			const innerPoints = [
+				{ x: -innerSize, y: -innerSize, z: -innerSize },
+				{ x: innerSize, y: -innerSize, z: -innerSize },
+				{ x: innerSize, y: innerSize, z: -innerSize },
+				{ x: -innerSize, y: innerSize, z: -innerSize },
+				{ x: -innerSize, y: -innerSize, z: innerSize },
+				{ x: innerSize, y: -innerSize, z: innerSize },
+				{ x: innerSize, y: innerSize, z: innerSize },
+				{ x: -innerSize, y: innerSize, z: innerSize }
+			];
+
+			// Rotate the points for both cubes
+			const rotatedOuterPoints = outerPoints.map(point => rotatePoint(point, hypercubeRotation, hypercubeRotation, hypercubeRotation));
+			const rotatedInnerPoints = innerPoints.map(point => rotatePoint(point, hypercubeRotation, hypercubeRotation, hypercubeRotation));
+
+			// Project the points to 2D
+			const projectedOuterPoints = rotatedOuterPoints.map(point => project(point));
+			const projectedInnerPoints = rotatedInnerPoints.map(point => project(point));
+
+			// Draw the edges for both cubes
+			const edges = [
+				[0, 1], [1, 2], [2, 3], [3, 0],
+				[4, 5], [5, 6], [6, 7], [7, 4],
+				[0, 4], [1, 5], [2, 6], [3, 7]
+			];
+
+			// Outer cube edges
+			ctx.beginPath();
+			edges.forEach(edge => {
+				const [start, end] = edge;
+				ctx.moveTo(projectedOuterPoints[start].x + x, projectedOuterPoints[start].y + y);
+				ctx.lineTo(projectedOuterPoints[end].x + x, projectedOuterPoints[end].y + y);
+			});
+			ctx.stroke();
+
+			// Inner cube edges
+			ctx.beginPath();
+			edges.forEach(edge => {
+				const [start, end] = edge;
+				ctx.moveTo(projectedInnerPoints[start].x + x, projectedInnerPoints[start].y + y);
+				ctx.lineTo(projectedInnerPoints[end].x + x, projectedInnerPoints[end].y + y);
+			});
+			ctx.stroke();
+
+			// Connect corresponding points of inner and outer cubes
+			for (let i = 0; i < 4; i++) {
+				ctx.beginPath();
+				ctx.moveTo(projectedOuterPoints[i].x + x, projectedOuterPoints[i].y + y);
+				ctx.lineTo(projectedInnerPoints[i].x + x, projectedInnerPoints[i].y + y);
+				ctx.stroke();
+			}
+			for (let i = 4; i < 8; i++) {
+				ctx.beginPath();
+				ctx.moveTo(projectedOuterPoints[i].x + x, projectedOuterPoints[i].y + y);
+				ctx.lineTo(projectedInnerPoints[i].x + x, projectedInnerPoints[i].y + y);
+				ctx.stroke();
+			}
+
+			hypercubeRotation += 0.02; // Rotation speed for the hypercube
+		}
+
+		// Mouse event listeners
+		canvas.addEventListener('mousemove', (e) => {
+			mouseX = e.clientX;
+			mouseY = e.clientY;
+		
+			if (isDragging) {
+				let deltaX = e.clientX - lastMouseX;
+				let deltaY = e.clientY - lastMouseY;
+				rotationAngleY += deltaX * 0.002;
+				rotationAngleX += deltaY * 0.002;
+				lastMouseX = e.clientX;
+				lastMouseY = e.clientY;
+			}
+		});
+		
+		canvas.addEventListener('mousedown', (e) => {
+			isDragging = true;
+			lastMouseX = e.clientX;
+			lastMouseY = e.clientY;
+		});
+		
+		canvas.addEventListener('mouseup', () => {
+			isDragging = false;
+		});
+		
+		// Zoom with scroll wheel
+		canvas.addEventListener('wheel', (e) => {
+			if (e.deltaY < 0) {
+				focalLength *= 1.1;
+			} else {
+				focalLength /= 1.1;
+			}
+		});
+		
+		// Resize the canvas
+		window.addEventListener('resize', () => {
+			canvas.width = window.innerWidth;
+			canvas.height = window.innerHeight;
+		});
+
+		// Touch event listeners for zoom and rotate
+		canvas.addEventListener('touchstart', (e) => {
+			if (e.touches.length === 1) {
+				isDragging = true;
+				lastMouseX = e.touches[0].clientX;
+				lastMouseY = e.touches[0].clientY;
+			} else if (e.touches.length === 2) {
+				const dist = getDistance(e.touches[0], e.touches[1]);
+				pinchStartDistance = dist;
+				pinchStartFocalLength = focalLength;
+			}
+		});
+
+		canvas.addEventListener('touchmove', (e) => {
+			if (e.touches.length === 1 && isDragging) {
+				let deltaX = e.touches[0].clientX - lastMouseX;
+				let deltaY = e.touches[0].clientY - lastMouseY;
+				rotationAngleY += deltaX * 0.002;
+				rotationAngleX += deltaY * 0.002;
+				lastMouseX = e.touches[0].clientX;
+				lastMouseY = e.touches[0].clientY;
+			} else if (e.touches.length === 2) {
+				const dist = getDistance(e.touches[0], e.touches[1]);
+				const zoomFactor = dist / pinchStartDistance;
+				focalLength = pinchStartFocalLength * zoomFactor;
+			}
+		});
+
+		canvas.addEventListener('touchend', () => {
+			isDragging = false;
+		});
+
+		// Helper function to calculate distance between two touch points
+		function getDistance(touch1, touch2) {
+			const dx = touch2.clientX - touch1.clientX;
+			const dy = touch2.clientY - touch1.clientY;
+			return Math.sqrt(dx * dx + dy * dy);
+		}
+		
+		// Start the animation
+		draw();
+	</script>
+</body>
+</html>
