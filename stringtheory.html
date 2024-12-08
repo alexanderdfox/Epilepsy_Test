@@ -9,7 +9,7 @@
 			margin: 0;
 			padding: 0;
 			height: 100%;
-			background-color: black;
+			background-color: white;
 			overflow: hidden;
 			cursor: none; /* Hide the default cursor */
 			touch-action: none; /* Prevent default touch behavior */
@@ -19,7 +19,7 @@
 			display: block;
 			width: 100%;
 			height: 100%;
-			background-color: black;
+			background-color: white;
 		}
 	</style>
 </head>
@@ -119,7 +119,7 @@
 		function draw() {
 			ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-			ctx.strokeStyle = 'rgba(0, 255, 255, 0.7)';
+			ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
 
 			strings.forEach(string => {
 				ctx.beginPath();
