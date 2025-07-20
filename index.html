@@ -1,240 +1,321 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Epilepsy Test</title>
-	<style>
-		body {
-			margin: 0;
-			display: grid;
-			gap: 0;
-			height: 100vh;
-			width: 100vw;
-			overflow: hidden;
-			background: lightblue;
-		}
-
-		.spin-container {
-			position: relative;
-			display: flex;
-			justify-content: center;
-			align-items: center;
-		}
-
-		.spinA, .spinZ {
-			width: 100%;
-			height: 100%;
-			position: absolute;
-			background-size: cover;
-			border-radius: 120px;
-		}
-
-		.spinA {
-			top: -100px;
-			left: -100px;
-			background: linear-gradient(to right, 
-				#FF0000, /* Red */
-				#FF7F00, /* Orange */
-				#FFFF00, /* Yellow */
-				#00FF00, /* Green */
-				#00FFFF, /* Cyan */
-				#0000FF, /* Blue */
-				#8B00FF, /* Violet */
-				#FF00FF, /* Magenta */
-				#FF0000  /* Red */
-			);
-			animation: spinA 1s ease-in-out infinite, changeGradient 1s ease-in-out infinite;
-			opacity: 50%;
-		}
-
-		.spinZ {
-			background: linear-gradient(to right, 
-				#FF0000, /* Red (original end) */
-				#FF00FF, /* Magenta */
-				#8B00FF, /* Violet */
-				#0000FF, /* Blue */
-				#00FFFF, /* Cyan */
-				#00FF00, /* Green */
-				#FFFF00, /* Yellow */
-				#FF7F00, /* Orange */
-				#FF0000  /* Red (original start) */
-			);
-			animation: spinZ 1s ease-in-out infinite, changeGradientInverted 1s ease-in-out infinite;
-			opacity: 50%;
-		}
-
-		@keyframes spinZ {
-			from {
-				transform: rotate(0deg);
-			}
-			to {
-				transform: rotate(360deg);
-			}
-		}
-
-		@keyframes spinA {
-			from {
-				transform: rotate(360deg);
-			}
-			to {
-				transform: rotate(0deg);
-			}
-		}
-
-		@keyframes changeGradient {
-			0% {
-				background: linear-gradient(to right, 
-					#FF0000, #FF7F00, #FFFF00, #00FF00, #00FFFF, #0000FF, #8B00FF, #FF00FF, #FF0000);
-			}
-			50% {
-				background: linear-gradient(to right, 
-					#FF00FF, #8B00FF, #0000FF, #00FFFF, #00FF00, #FFFF00, #FF7F00, #FF0000, #FF00FF);
-			}
-			100% {
-				background: linear-gradient(to right, 
-					#FF0000, #FF7F00, #FFFF00, #00FF00, #00FFFF, #0000FF, #8B00FF, #FF00FF, #FF0000);
-			}
-		}
-
-		@keyframes changeGradientInverted {
-			0% {
-				background: linear-gradient(to right, 
-					#FF0000, #FF00FF, #8B00FF, #0000FF, #00FFFF, #00FF00, #FFFF00, #FF7F00, #FF0000);
-			}
-			50% {
-				background: linear-gradient(to right, 
-					#FF00FF, #FF7F00, #FFFF00, #00FF00, #00FFFF, #0000FF, #8B00FF, #FF0000, #FF00FF);
-			}
-			100% {
-				background: linear-gradient(to right, 
-					#FF0000, #FF00FF, #8B00FF, #0000FF, #00FFFF, #00FF00, #FFFF00, #FF7F00, #FF0000);
-			}
-		}
-
-		/* Intro overlay styles */
-		.overlay {
-			position: fixed;
-			top: 0;
-			left: 0;
-			width: 100%;
-			height: 100%;
-			background-color: rgba(0, 0, 0, 0.8);
-			color: white;
-			display: flex;
-			justify-content: center;
-			align-items: center;
-			text-align: center;
-			flex-direction: column;
-			z-index: 10;
-		}
-
-		.overlay p {
-			font-size: 1.5em;
-			margin: 20px;
-			max-width: 80%;
-		}
-
-		.overlay button {
-			padding: 10px 20px;
-			font-size: 1.2em;
-			cursor: pointer;
-		}
-
-		/* Unsupported browser message styles */
-		.unsupported-message {
-			position: fixed;
-			top: 0;
-			left: 0;
-			width: 100%;
-			height: 100%;
-			background-color: rgba(0, 0, 0, 0.8);
-			color: white;
-			display: none;
-			justify-content: center;
-			align-items: center;
-			text-align: center;
-			flex-direction: column;
-			z-index: 20;
-		}
-
-		.unsupported-message p {
-			font-size: 2em;
-			margin: 20px;
-			max-width: 80%;
-		}
-	</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>12D Sphere Zoom with Crawling Ants - Collision Physics</title>
+  <style>
+	html, body {
+	  margin: 0;
+	  overflow: hidden;
+	  background: black;
+	}
+	canvas {
+	  display: block;
+	}
+  </style>
 </head>
 <body>
-	<div class="overlay" id="overlay">
-		<p>
-			**Warning:** This content may contain flashing lights, visual effects, or other stimuli that could potentially trigger seizures or other symptoms in individuals with epilepsy or related conditions. If you have a history of epilepsy or other health concerns, please consult with a healthcare professional before engaging with this content. If you experience any symptoms such as dizziness, nausea, or visual disturbances, stop viewing immediately and seek medical attention.
-		</p>
-		<p>
-			THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-		</p>
-		<button id="continueButton">Continue</button>
-	</div>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 
-	<div class="unsupported-message" id="unsupportedMessage">
-		<p>Your browser does not support the required features to view this content. Please use a modern browser such as Chrome, Firefox, or Edge.</p>
-	</div>
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
 
-	<script>
-		// Feature detection for unsupported browsers
-		function isBrowserSupported() {
-			// Example checks for ES6 features, CSS grid, and other modern features
-			try {
-				return typeof Symbol !== "undefined" && 
-					typeof Proxy !== "undefined" &&
-					CSS.supports("display", "grid");
-					CSS.supports("animation", "1s ease-in-out infinite");
-			} catch (e) {
-				return false;
-			}
-		}
+const cols = 12, rows = 12;
+const numDims = cols * rows;
+const samples = 800;
+const radius = 1;
 
-		// Show a message for unsupported browsers
-		if (!isBrowserSupported()) {
-			document.getElementById('unsupportedMessage').style.display = 'flex';
-			document.getElementById('overlay').style.display = 'none';
-		} else {
-			document.getElementById('continueButton').onclick = function() {
-				document.getElementById('overlay').style.display = 'none';
+function fibonacciSphere(samples) {
+  const points = [];
+  const offset = 2 / samples;
+  const increment = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < samples; i++) {
+	const y = ((i * offset) - 1) + offset / 2;
+	const r = Math.sqrt(1 - y * y);
+	const phi = i * increment;
+	const x = Math.cos(phi) * r;
+	const z = Math.sin(phi) * r;
+	points.push([x, y, z]);
+  }
+  return points;
+}
 
-				// Set the size of each grid cell
-				const cellSize = 200;
+const points3D = fibonacciSphere(samples);
 
-				// Get the number of columns and rows needed to fill the screen
-				const cols = Math.ceil(window.innerWidth / cellSize);
-				const rows = Math.ceil(window.innerHeight / cellSize);
+let cellW = canvas.width / cols;
+let cellH = canvas.height / rows;
 
-				// Set the grid template columns and rows on the body
-				document.body.style.gridTemplateColumns = `repeat(${cols}, ${cellSize}px)`;
-				document.body.style.gridTemplateRows = `repeat(${rows}, ${cellSize}px)`;
+// Cell radius for collision (circle inside its cell)
+const cellRadius = cellW / 6;
 
-				// Function to create a spin container
-				function createSpinContainer() {
-					const container = document.createElement('div');
-					container.className = 'spin-container';
+// Ant radius
+const antRadius = 3;
 
-					const spinZ = document.createElement('div');
-					spinZ.className = 'spinZ';
-					container.appendChild(spinZ);
+// Cells with position and velocity and rotation
+const cells = Array.from({ length: numDims }, (_, i) => {
+  const col = i % cols;
+  const row = Math.floor(i / cols);
+  return {
+	rotX: Math.random() * 0.01 + 0.005,
+	rotY: Math.random() * 0.01 + 0.005,
+	rotZ: Math.random() * 0.01 + 0.005,
+	angle: 0,
+	x: col * cellW + cellW / 2,
+	y: row * cellH + cellH / 2,
+	vx: (Math.random() * 2 - 1) * 1,
+	vy: (Math.random() * 2 - 1) * 1,
+	mass: 1
+  };
+});
 
-					const spinA = document.createElement('div');
-					spinA.className = 'spinA';
-					container.appendChild(spinA);
+// Ants with position, velocity (speed+angle)
+const ants = Array.from({ length: 144 }, () => {
+  const angle = Math.random() * Math.PI * 2;
+  const speed = 1 + Math.random() * 1.5;
+  return {
+	x: Math.random() * canvas.width,
+	y: Math.random() * canvas.height,
+	vx: Math.cos(angle) * speed,
+	vy: Math.sin(angle) * speed,
+	radius: antRadius,
+	mass: 0.3
+  };
+});
 
-					return container;
-				}
+function rotatePoint(p, angleX, angleY, angleZ) {
+  let [x, y, z] = p;
 
-				// Create and append the grid cells
-				for (let i = 0; i < cols * rows; i++) {
-					document.body.appendChild(createSpinContainer());
-				}
-			}
-		}
-	</script>
+  let dy = y, dz = z;
+  y = dy * Math.cos(angleX) - dz * Math.sin(angleX);
+  z = dy * Math.sin(angleX) + dz * Math.cos(angleX);
+
+  let dx = x;
+  x = dx * Math.cos(angleY) + z * Math.sin(angleY);
+  z = -dx * Math.sin(angleY) + z * Math.cos(angleY);
+
+  dx = x;
+  dy = y;
+  x = dx * Math.cos(angleZ) - dy * Math.sin(angleZ);
+  y = dx * Math.sin(angleZ) + dy * Math.cos(angleZ);
+
+  return [x, y, z];
+}
+
+// Bounce cells inside their grid cells (bounds with margin)
+function bounceCells() {
+  cells.forEach((cell, i) => {
+	const col = i % cols;
+	const row = Math.floor(i / cols);
+
+	const leftBound = col * cellW + cellRadius;
+	const rightBound = (col + 1) * cellW - cellRadius;
+	const topBound = row * cellH + cellRadius;
+	const bottomBound = (row + 1) * cellH - cellRadius;
+
+	cell.x += cell.vx;
+	cell.y += cell.vy;
+
+	if (cell.x < leftBound) {
+	  cell.x = leftBound;
+	  cell.vx *= -1;
+	} else if (cell.x > rightBound) {
+	  cell.x = rightBound;
+	  cell.vx *= -1;
+	}
+	if (cell.y < topBound) {
+	  cell.y = topBound;
+	  cell.vy *= -1;
+	} else if (cell.y > bottomBound) {
+	  cell.y = bottomBound;
+	  cell.vy *= -1;
+	}
+  });
+}
+
+// Bounce ants inside canvas edges
+function bounceAnts() {
+  ants.forEach(ant => {
+	ant.x += ant.vx;
+	ant.y += ant.vy;
+
+	if (ant.x < ant.radius) {
+	  ant.x = ant.radius;
+	  ant.vx *= -1;
+	} else if (ant.x > canvas.width - ant.radius) {
+	  ant.x = canvas.width - ant.radius;
+	  ant.vx *= -1;
+	}
+	if (ant.y < ant.radius) {
+	  ant.y = ant.radius;
+	  ant.vy *= -1;
+	} else if (ant.y > canvas.height - ant.radius) {
+	  ant.y = canvas.height - ant.radius;
+	  ant.vy *= -1;
+	}
+  });
+}
+
+// Elastic collision helper for two circles in 2D
+function resolveCollision(a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+
+  if (dist === 0) return; // Prevent divide by zero
+
+  // Normal vector
+  const nx = dx / dist;
+  const ny = dy / dist;
+
+  // Relative velocity
+  const vxRel = a.vx - b.vx;
+  const vyRel = a.vy - b.vy;
+
+  // Velocity along the normal
+  const velAlongNormal = vxRel * nx + vyRel * ny;
+
+  // If velocities are separating, no collision
+  if (velAlongNormal > 0) return;
+
+  // Elastic collision impulse scalar
+  const restitution = 1; // perfectly elastic
+  const impulse = -(1 + restitution) * velAlongNormal / (1 / a.mass + 1 / b.mass);
+
+  // Change velocities based on impulse
+  const impulseX = impulse * nx;
+  const impulseY = impulse * ny;
+
+  a.vx += impulseX / a.mass;
+  a.vy += impulseY / a.mass;
+
+  b.vx -= impulseX / b.mass;
+  b.vy -= impulseY / b.mass;
+
+  // Positional correction to prevent sinking
+  const percent = 0.2; // usually 20% to 80%
+  const slop = 0.01; // small value to prevent jitter
+  const overlap = Math.max(dist - (a.radius + b.radius), 0);
+  const correction = (overlap / (1 / a.mass + 1 / b.mass)) * percent;
+
+  a.x -= correction * nx / a.mass;
+  a.y -= correction * ny / a.mass;
+  b.x += correction * nx / b.mass;
+  b.y += correction * ny / b.mass;
+}
+
+// Check collisions between cells
+function checkCellCollisions() {
+  for (let i = 0; i < cells.length; i++) {
+	const a = cells[i];
+	a.radius = cellRadius; // assign radius for collision
+
+	for (let j = i + 1; j < cells.length; j++) {
+	  const b = cells[j];
+	  b.radius = cellRadius;
+
+	  const dx = b.x - a.x;
+	  const dy = b.y - a.y;
+	  const dist = Math.sqrt(dx * dx + dy * dy);
+	  if (dist < a.radius + b.radius) {
+		resolveCollision(a, b);
+	  }
+	}
+  }
+}
+
+// Check collisions between ants and cells
+function checkAntCellCollisions() {
+  for (let i = 0; i < ants.length; i++) {
+	const ant = ants[i];
+
+	for (let j = 0; j < cells.length; j++) {
+	  const cell = cells[j];
+	  cell.radius = cellRadius;
+
+	  const dx = ant.x - cell.x;
+	  const dy = ant.y - cell.y;
+	  const dist = Math.sqrt(dx * dx + dy * dy);
+
+	  if (dist < ant.radius + cell.radius) {
+		resolveCollision(ant, cell);
+	  }
+	}
+  }
+}
+
+// Optional: Ant-ant collisions
+function checkAntAntCollisions() {
+  for (let i = 0; i < ants.length; i++) {
+	const a = ants[i];
+	for (let j = i + 1; j < ants.length; j++) {
+	  const b = ants[j];
+	  const dx = b.x - a.x;
+	  const dy = b.y - a.y;
+	  const dist = Math.sqrt(dx * dx + dy * dy);
+
+	  if (dist < a.radius + b.radius) {
+		resolveCollision(a, b);
+	  }
+	}
+  }
+}
+
+function drawAnts() {
+  ctx.fillStyle = "white";
+  for (let ant of ants) {
+	ctx.beginPath();
+	ctx.arc(ant.x, ant.y, ant.radius, 0, 2 * Math.PI);
+	ctx.fill();
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  cellW = canvas.width / cols;
+  cellH = canvas.height / rows;
+
+  bounceCells();
+  bounceAnts();
+
+  checkCellCollisions();
+  checkAntCellCollisions();
+  checkAntAntCollisions();
+
+  cells.forEach((cell, i) => {
+	cell.angle += 1;
+
+	for (let j = 0; j < samples; j++) {
+	  const p = points3D[j];
+	  const rotated = rotatePoint(p, cell.angle * cell.rotX, cell.angle * cell.rotY, cell.angle * cell.rotZ);
+	  const [x, y, z] = rotated;
+
+	  const scale = cellW / 4;
+	  const screenX = cell.x + x * scale;
+	  const screenY = cell.y - y * scale;
+
+	  const hue = ((i * 3 + j / samples * 360) + performance.now() * 0.02) % 360;
+	  const brightness = 0.5 + 0.5 * ((z + radius) / (2 * radius));
+	  const size = 1 + 3 * brightness;
+	  ctx.fillStyle = `hsl(${hue}, 100%, ${brightness * 50}%)`;
+	  ctx.beginPath();
+	  ctx.arc(screenX, screenY, size, 0, 2 * Math.PI);
+	  ctx.fill();
+	}
+  });
+
+  drawAnts();
+  requestAnimationFrame(draw);
+}
+
+draw();
+</script>
 </body>
 </html>
