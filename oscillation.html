@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>10x10 Oscillation</title>
+  <title>Grid Bouncing Universes</title>
   <style>
 	html, body {
 	  margin: 0;
@@ -25,55 +25,129 @@
 	  canvas.width = window.innerWidth;
 	  canvas.height = window.innerHeight;
 	}
-
 	window.addEventListener("resize", resizeCanvas);
 	resizeCanvas();
 
+	const size = 100;
+	const radius = size / 2;
 	const cols = 10;
 	const rows = 10;
-	const numUniverses = 25;  // Number of nested circles per cell
-	const scaleFactor = 0.65; // How quickly radius shrinks
-	const padding = 10;
+	const nestedCircles = 20;
+	const scaleFactor = 0.65;
+	const universes = [];
 
-	const cellWidth = canvas.width / cols;
-	const cellHeight = canvas.height / rows;
-	const baseRadius = Math.min(cellWidth, cellHeight) / 2 - padding;
+	class Universe {
+	  constructor(x, y) {
+		this.x = x;
+		this.y = y;
+		this.vx = (Math.random() - 0.5) * 1.5;
+		this.vy = (Math.random() - 0.5) * 1.5;
+		this.rotation = Math.random() * 2 * Math.PI;
+		this.rotationSpeed = (Math.random() - 0.5) * 0.01;
+		this.phaseOffset = Math.random() * Math.PI * 2;
+	  }
 
-	function drawUniverse(x, y, time, phaseOffset) {
-	  const centerX = x + cellWidth / 2;
-	  const centerY = y + cellHeight / 2;
+	  update(time) {
+		this.x += this.vx;
+		this.y += this.vy;
+		this.rotation += this.rotationSpeed;
 
-	  for (let i = 0; i < numUniverses; i++) {
-		let radius = baseRadius * Math.pow(scaleFactor, i);
-		let pulse = 1 + 0.05 * Math.sin(time / 300 + i + phaseOffset);
-		radius *= pulse;
+		// Edge bounce
+		if (this.x - radius < 0 || this.x + radius > canvas.width) this.vx *= -1;
+		if (this.y - radius < 0 || this.y + radius > canvas.height) this.vy *= -1;
 
-		const hue = (240 + i * 5 + phaseOffset * 100) % 360;
-		ctx.strokeStyle = `hsl(${hue}, 80%, 60%)`;
-		ctx.lineWidth = 1;
+		this.draw(time);
+	  }
 
-		ctx.beginPath();
-		ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-		ctx.stroke();
+	  draw(time) {
+		ctx.save();
+		ctx.translate(this.x, this.y);
+		ctx.rotate(this.rotation);
+
+		for (let i = 0; i < nestedCircles; i++) {
+		  let r = radius * Math.pow(scaleFactor, i);
+		  let pulse = 1 + 0.05 * Math.sin(time / 300 + i + this.phaseOffset);
+		  r *= pulse;
+
+		  const hue = (240 + i * 7 + this.phaseOffset * 50) % 360;
+		  ctx.strokeStyle = `hsl(${hue}, 80%, 60%)`;
+		  ctx.lineWidth = 1;
+		  ctx.beginPath();
+		  ctx.arc(0, 0, r, 0, 2 * Math.PI);
+		  ctx.stroke();
+		}
+
+		ctx.restore();
 	  }
 	}
 
-	function draw(time) {
-	  ctx.clearRect(0, 0, canvas.width, canvas.height);
+	function initializeGrid() {
+	  const startX = (canvas.width - cols * size) / 2;
+	  const startY = (canvas.height - rows * size) / 2;
 
 	  for (let row = 0; row < rows; row++) {
 		for (let col = 0; col < cols; col++) {
-		  const x = col * cellWidth;
-		  const y = row * cellHeight;
-		  const phase = (row * cols + col) * 0.3; // unique phase per cell
-		  drawUniverse(x, y, time, phase);
+		  const x = startX + col * size + radius;
+		  const y = startY + row * size + radius;
+		  universes.push(new Universe(x, y));
 		}
 	  }
-
-	  requestAnimationFrame(draw);
 	}
 
-	requestAnimationFrame(draw);
+	function resolveCollisions() {
+	  for (let i = 0; i < universes.length; i++) {
+		for (let j = i + 1; j < universes.length; j++) {
+		  const a = universes[i];
+		  const b = universes[j];
+
+		  const dx = b.x - a.x;
+		  const dy = b.y - a.y;
+		  const dist = Math.sqrt(dx * dx + dy * dy);
+		  const minDist = size;
+
+		  if (dist < minDist && dist > 0) {
+			// Normalize
+			const nx = dx / dist;
+			const ny = dy / dist;
+
+			// Relative velocity
+			const dvx = b.vx - a.vx;
+			const dvy = b.vy - a.vy;
+			const dot = dvx * nx + dvy * ny;
+
+			if (dot < 0) {
+			  const impulse = dot;
+			  a.vx += impulse * nx;
+			  a.vy += impulse * ny;
+			  b.vx -= impulse * nx;
+			  b.vy -= impulse * ny;
+			}
+
+			// Positional separation
+			const overlap = (minDist - dist) / 2;
+			a.x -= nx * overlap;
+			a.y -= ny * overlap;
+			b.x += nx * overlap;
+			b.y += ny * overlap;
+		  }
+		}
+	  }
+	}
+
+	initializeGrid();
+
+	function animate(time) {
+	  ctx.clearRect(0, 0, canvas.width, canvas.height);
+	  resolveCollisions();
+
+	  for (const u of universes) {
+		u.update(time);
+	  }
+
+	  requestAnimationFrame(animate);
+	}
+
+	requestAnimationFrame(animate);
   </script>
 </body>
 </html>
