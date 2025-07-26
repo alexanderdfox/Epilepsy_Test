@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>10x10 Oscillation</title>
+  <style>
+	html, body {
+	  margin: 0;
+	  background: black;
+	  overflow: hidden;
+	}
+	canvas {
+	  display: block;
+	}
+  </style>
+</head>
+<body>
+  <canvas id="universeCanvas"></canvas>
+
+  <script>
+	const canvas = document.getElementById("universeCanvas");
+	const ctx = canvas.getContext("2d");
+
+	function resizeCanvas() {
+	  canvas.width = window.innerWidth;
+	  canvas.height = window.innerHeight;
+	}
+
+	window.addEventListener("resize", resizeCanvas);
+	resizeCanvas();
+
+	const cols = 10;
+	const rows = 10;
+	const numUniverses = 25;  // Number of nested circles per cell
+	const scaleFactor = 0.65; // How quickly radius shrinks
+	const padding = 10;
+
+	const cellWidth = canvas.width / cols;
+	const cellHeight = canvas.height / rows;
+	const baseRadius = Math.min(cellWidth, cellHeight) / 2 - padding;
+
+	function drawUniverse(x, y, time, phaseOffset) {
+	  const centerX = x + cellWidth / 2;
+	  const centerY = y + cellHeight / 2;
+
+	  for (let i = 0; i < numUniverses; i++) {
+		let radius = baseRadius * Math.pow(scaleFactor, i);
+		let pulse = 1 + 0.05 * Math.sin(time / 300 + i + phaseOffset);
+		radius *= pulse;
+
+		const hue = (240 + i * 5 + phaseOffset * 100) % 360;
+		ctx.strokeStyle = `hsl(${hue}, 80%, 60%)`;
+		ctx.lineWidth = 1;
+
+		ctx.beginPath();
+		ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+		ctx.stroke();
+	  }
+	}
+
+	function draw(time) {
+	  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+	  for (let row = 0; row < rows; row++) {
+		for (let col = 0; col < cols; col++) {
+		  const x = col * cellWidth;
+		  const y = row * cellHeight;
+		  const phase = (row * cols + col) * 0.3; // unique phase per cell
+		  drawUniverse(x, y, time, phase);
+		}
+	  }
+
+	  requestAnimationFrame(draw);
+	}
+
+	requestAnimationFrame(draw);
+  </script>
+</body>
+</html>
