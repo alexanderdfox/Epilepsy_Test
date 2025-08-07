@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Spiral Grid - Anti-Fork Convergence</title>
+  <style>
+	html, body {
+	  margin: 0;
+	  padding: 0;
+	  overflow: hidden;
+	  background: #000;
+	}
+	canvas {
+	  display: block;
+	}
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const GRID_ROWS = 10;
+const GRID_COLS = 10;
+let CELL_WIDTH, CELL_HEIGHT;
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  CELL_WIDTH = canvas.width / GRID_COLS;
+  CELL_HEIGHT = canvas.height / GRID_ROWS;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+const FPS = 60;
+const cells = [];
+
+class SpiralTimeline {
+  constructor(angleOffset = 0, maxR = 0, centerX = 0, centerY = 0) {
+	this.angle = angleOffset;
+	this.radius = maxR;
+	this.centerX = centerX;
+	this.centerY = centerY;
+	this.color = `rgb(200, 200, 200)`; // Static grayscale
+  }
+
+  move() {
+	this.angle += 0.03;
+	this.radius *= 0.985;
+	const x = this.centerX + this.radius * Math.cos(this.angle);
+	const y = this.centerY + this.radius * Math.sin(this.angle);
+	this.position = { x, y };
+  }
+
+  draw(ctx) {
+	ctx.fillStyle = this.color;
+	ctx.fillRect(this.position.x, this.position.y, 1.5, 1.5);
+  }
+
+  isDead() {
+	return this.radius < 1;
+  }
+}
+
+class SpiralCell {
+  constructor(x, y, w, h) {
+	this.x = x;
+	this.y = y;
+	this.w = w;
+	this.h = h;
+	this.centerX = x + w / 2;
+	this.centerY = y + h / 2;
+	this.timelines = [];
+
+	// Initialize 6 spirals per cell
+	for (let i = 0; i < 6; i++) {
+	  const angle = (i / 6) * Math.PI * 2;
+	  const maxR = Math.min(w, h) / 2;
+	  this.timelines.push(new SpiralTimeline(angle, maxR, this.centerX, this.centerY));
+	}
+  }
+
+  update() {
+	for (let t of this.timelines) t.move();
+	this.timelines = this.timelines.filter(t => !t.isDead());
+
+	// Optionally respawn when all have collapsed
+	if (this.timelines.length === 0) {
+	  for (let i = 0; i < 6; i++) {
+		const angle = (i / 6) * Math.PI * 2;
+		const maxR = Math.min(this.w, this.h) / 2;
+		this.timelines.push(new SpiralTimeline(angle, maxR, this.centerX, this.centerY));
+	  }
+	}
+  }
+
+  draw(ctx) {
+	ctx.save();
+	this.timelines.forEach(t => t.draw(ctx));
+	ctx.restore();
+  }
+}
+
+// Create grid of spiral cells
+for (let row = 0; row < GRID_ROWS; row++) {
+  for (let col = 0; col < GRID_COLS; col++) {
+	const x = col * CELL_WIDTH;
+	const y = row * CELL_HEIGHT;
+	cells.push(new SpiralCell(x, y, CELL_WIDTH, CELL_HEIGHT));
+  }
+}
+
+function loop() {
+  ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  for (const cell of cells) {
+	cell.update();
+	cell.draw(ctx);
+  }
+}
+
+setInterval(loop, 1000 / FPS);
+</script>
+</body>
+</html>
