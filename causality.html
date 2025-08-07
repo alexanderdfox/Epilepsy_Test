@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VHS Fork Bomb - 10x10 Lava Lamp Grid</title>
+  <style>
+	html, body {
+	  margin: 0;
+	  padding: 0;
+	  overflow: hidden;
+	  background: #000;
+	}
+	canvas {
+	  display: block;
+	}
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const GRID_ROWS = 10;
+const GRID_COLS = 10;
+let CELL_WIDTH, CELL_HEIGHT;
+
+// Resize logic
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  CELL_WIDTH = Math.floor(canvas.width / GRID_COLS);
+  CELL_HEIGHT = Math.floor(canvas.height / GRID_ROWS);
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+const FPS = 60;
+const cells = [];
+
+// Timeline class (same as original)
+class Timeline {
+  constructor(name, x, y, color, maxW, maxH) {
+	this.name = name;
+	this.position = {
+	  x: x ?? Math.floor(maxW / 2),
+	  y: y ?? Math.floor(maxH / 2)
+	};
+	this.history = [ { ...this.position } ];
+	this.color = color ?? Timeline.randomColor();
+	this.maxW = maxW;
+	this.maxH = maxH;
+  }
+
+  static randomColor() {
+	const r = 100 + Math.floor(Math.random() * 156);
+	const g = 100 + Math.floor(Math.random() * 156);
+	const b = 100 + Math.floor(Math.random() * 156);
+	return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  move() {
+	const moves = [
+	  { dx: 0, dy: 1 }, { dx: 1, dy: 0 },
+	  { dx: 0, dy: -1 }, { dx: -1, dy: 0 }
+	];
+	const move = moves[Math.floor(Math.random() * moves.length)];
+	let newX = this.position.x + move.dx;
+	let newY = this.position.y + move.dy;
+
+	newX = Math.max(0, Math.min(this.maxW - 1, newX));
+	newY = Math.max(0, Math.min(this.maxH - 1, newY));
+
+	this.position = { x: newX, y: newY };
+	this.history.push({ ...this.position });
+
+	if (Math.random() < 0.02) {
+	  this.color = Timeline.randomColor();
+	}
+  }
+
+  rewind(steps = 3) {
+	if (this.history.length > steps) {
+	  this.position = this.history[this.history.length - steps - 1];
+	  this.history = this.history.slice(0, this.history.length - steps);
+	}
+  }
+
+  fork() {
+	const newName = this.name + 'XYZ'.charAt(Math.floor(Math.random() * 3));
+	const forked = new Timeline(
+	  newName,
+	  this.position.x,
+	  this.position.y,
+	  this.color,
+	  this.maxW,
+	  this.maxH
+	);
+	forked.history = [...this.history];
+	return forked;
+  }
+}
+
+// Cell: One lava lamp zone
+class Cell {
+  constructor(x, y, width, height, id) {
+	this.x = x;
+	this.y = y;
+	this.w = width;
+	this.h = height;
+	this.id = id;
+	this.timelines = [new Timeline("A", null, null, null, this.w, this.h)];
+  }
+
+  update() {
+	this.timelines.forEach(tl => {
+	  tl.move();
+	  if (Math.random() < 0.08) tl.rewind();
+	  if (Math.random() < 0.03 && this.timelines.length < 15) {
+		this.timelines.push(tl.fork());
+	  }
+	});
+  }
+
+  draw(ctx) {
+	ctx.save();
+	ctx.translate(this.x, this.y);
+	this.timelines.forEach(tl => {
+	  ctx.fillStyle = tl.color;
+	  ctx.fillRect(tl.position.x, tl.position.y, 1, 1);
+	});
+	ctx.restore();
+  }
+}
+
+// Init 10x10 grid of lava lamp cells
+for (let row = 0; row < GRID_ROWS; row++) {
+  for (let col = 0; col < GRID_COLS; col++) {
+	const cellX = col * CELL_WIDTH;
+	const cellY = row * CELL_HEIGHT;
+	const id = `cell-${row}-${col}`;
+	cells.push(new Cell(cellX, cellY, CELL_WIDTH, CELL_HEIGHT, id));
+  }
+}
+
+function loop() {
+  // Fade with slight trail (VHS effect)
+  ctx.fillStyle = "rgba(0,0,0,0.1)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  cells.forEach(cell => {
+	cell.update();
+	cell.draw(ctx);
+  });
+}
+
+setInterval(loop, 1000 / FPS);
+</script>
+</body>
+</html>
