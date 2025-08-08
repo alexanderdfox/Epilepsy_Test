@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CRT</title>
+  <style>
+	html, body {
+	  margin: 0;
+	  padding: 0;
+	  height: 100vh;
+	  width: 100vw;
+	  overflow: hidden;
+	  background: black;
+	}
+
+	iframe {
+	  width: 100vw;
+	  height: 100vh;
+	  border: none;
+	  position: absolute;
+	  transform-origin: center center;
+	  display: block;
+	  box-sizing: border-box;
+	}
+
+	#f1 { transform: rotate(0deg); top: 0; left: 0; }
+	#f2 { transform: rotate(90deg); top: 0; left: 0; }
+	#f3 { transform: rotate(270deg) scaleX(-1); top: 0; left: 0; }
+	#f4 { transform: rotate(180deg) scaleX(-1); top: 0; left: 0; }
+  </style>
+</head>
+<body>
+  <iframe id="f1"></iframe>
+  <iframe id="f2"></iframe>
+  <iframe id="f3"></iframe>
+  <iframe id="f4"></iframe>
+
+  <script>
+	const fugue = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Fugue Protocol</title>
+  <style>
+	html, body {
+	  margin: 0;
+	  background: transparent;
+	  overflow: hidden;
+	  height: 100%;
+	  width: 100%;
+	  perspective: 800px;
+	}
+  </style>
+</head>
+<body>
+<canvas id="fugueCanvas"></canvas>
+<script>
+  const canvas = document.getElementById("fugueCanvas");
+  const ctx = canvas.getContext("2d");
+
+  let w = canvas.width = window.innerWidth;
+  let h = canvas.height = window.innerHeight;
+
+  let cellSize = 10;
+  let cols = Math.floor(w / cellSize);
+  let rows = Math.floor(h / cellSize);
+
+  function randomColor(opacity = 1) {
+	const r = Math.floor(Math.random() * 256);
+	const g = Math.floor(Math.random() * 256);
+	const b = Math.floor(Math.random() * 256);
+	return \`rgba(\${r}, \${g}, \${b}, \${opacity})\`;
+  }
+
+  function drawCell(x, y, time) {
+	ctx.save();
+	ctx.translate(x * cellSize, y * cellSize);
+	ctx.fillStyle = randomColor(0.05);
+	ctx.fillRect(0, 0, cellSize, cellSize);
+	ctx.restore();
+  }
+
+  let angleX = 0, angleY = 0, angleZ = 0;
+  let scale = 1;
+
+  function animate(time) {
+	ctx.clearRect(0, 0, w, h);
+	for (let y = 0; y < rows; y++) {
+	  for (let x = 0; x < cols; x++) {
+		drawCell(x, y, time);
+	  }
+	}
+	angleX += (Math.random() - 0.5) * 0.5;
+	angleY += (Math.random() - 0.5) * 0.5;
+	angleZ += (Math.random() - 0.5) * 0.5;
+
+	scale += (Math.random() - 0.5) * 0.01;
+	scale = Math.max(0.9, Math.min(1.1, scale));
+
+	requestAnimationFrame(animate);
+  }
+
+  animate(0);
+
+  window.addEventListener('resize', () => {
+	w = canvas.width = window.innerWidth;
+	h = canvas.height = window.innerHeight;
+	cols = Math.floor(w / cellSize);
+	rows = Math.floor(h / cellSize);
+  });
+<\/script>
+</body>
+</html>
+	`;
+
+	// Set fugue HTML to each iframe via srcdoc
+	document.getElementById("f1").srcdoc = fugue;
+	document.getElementById("f2").srcdoc = fugue;
+	document.getElementById("f3").srcdoc = fugue;
+	document.getElementById("f4").srcdoc = fugue;
+  </script>
+</body>
+</html>
