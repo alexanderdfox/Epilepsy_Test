@@ -8,23 +8,21 @@
 	html, body {
 	  margin: 0;
 	  padding: 0;
-	  display: grid;
-	  grid-template-columns: 1fr 1fr;
-	  grid-template-rows: repeat(4, 1fr);
+	  width: 100vw;
 	  height: 100vh;
-	  gap: 2px;
+	  overflow: hidden;
 	  background: #000;
+	  font-family: Arial, sans-serif;
 	}
 
-	.iframe-container {
+	#iframe-container {
 	  display: none; /* Hidden until warning is acknowledged */
-	  grid-column: span 2;
 	  display: grid;
 	  grid-template-columns: 1fr 1fr;
 	  grid-template-rows: repeat(4, 1fr);
 	  gap: 2px;
-	  width: 100%;
-	  height: 100%;
+	  width: 100vw;
+	  height: 100vh;
 	}
 
 	a {
@@ -46,8 +44,8 @@
 	  z-index: 9999;
 	  top: 0;
 	  left: 0;
-	  width: 100%;
-	  height: 100%;
+	  width: 100vw;
+	  height: 100vh;
 	  background-color: rgba(0, 0, 0, 0.95);
 	  color: white;
 	  display: flex;
@@ -91,7 +89,7 @@
   </div>
 
   <!-- Hidden container for iframes -->
-  <div id="iframe-container" class="iframe-container"></div>
+  <div id="iframe-container"></div>
 
   <script>
 	const pages = [
@@ -101,7 +99,8 @@
 	  { title: "Spiral", src: "./spiral.html" },
 	  { title: "String Theory", src: "./stringtheory.html" },
 	  { title: "Tunnel", src: "./tunnel.html" },
-	  { title: "CRT", src: "./crt.html" }
+	  { title: "CRT", src: "./crt.html" },
+	  { title: "Extra", src: "./extra.html" } // <- make sure 8 total
 	];
 
 	document.getElementById("continue-btn").addEventListener("click", () => {
@@ -112,8 +111,8 @@
 	  const container = document.getElementById("iframe-container");
 	  container.style.display = "grid";
 
-	  // Inject iframes dynamically
-	  pages.forEach(({ title, src }) => {
+	  // Inject exactly 8 iframes
+	  pages.slice(0, 8).forEach(({ title, src }) => {
 		const a = document.createElement("a");
 		a.href = src;
 		a.title = title;
