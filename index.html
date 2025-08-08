@@ -10,25 +10,32 @@
       padding: 0;
       display: grid;
       grid-template-columns: 1fr 1fr;
-      grid-template-rows: 1fr 1fr 1fr;
+      grid-template-rows: repeat(4, 1fr); /* 4 rows for 7 iframes */
       height: 100vh;
       gap: 2px;
       background: #000;
+    }
+    a {
+      display: block;
+      width: 100%;
+      height: 100%;
     }
     iframe {
       width: 100%;
       height: 100%;
       border: none;
       background: #000;
+      pointer-events: none; /* Prevent interaction inside iframe */
     }
   </style>
 </head>
 <body>
-  <iframe src="./12D.html" title="12D"></iframe>
-  <iframe src="./causality.html" title="Causality"></iframe>
-  <iframe src="./oscillation.html" title="Oscillation"></iframe>
-  <iframe src="./spiral.html" title="Spiral"></iframe>
-  <iframe src="./stringtheory.html" title="String Theory"></iframe>
-  <iframe src="./tunnel.html" title="Tunnel"></iframe>
+  <a href="./12D.html" title="12D"><iframe src="./12D.html"></iframe></a>
+  <a href="./causality.html" title="Causality"><iframe src="./causality.html"></iframe></a>
+  <a href="./oscillation.html" title="Oscillation"><iframe src="./oscillation.html"></iframe></a>
+  <a href="./spiral.html" title="Spiral"><iframe src="./spiral.html"></iframe></a>
+  <a href="./stringtheory.html" title="String Theory"><iframe src="./stringtheory.html"></iframe></a>
+  <a href="./tunnel.html" title="Tunnel"><iframe src="./tunnel.html"></iframe></a>
+  <a href="./crt.html" title="CRT"><iframe src="./crt.html"></iframe></a>
 </body>
 </html>
