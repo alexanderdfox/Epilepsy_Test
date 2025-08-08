@@ -5,95 +5,126 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Epilepsy Test Visualizations</title>
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      grid-template-rows: repeat(4, 1fr);
-      height: 100vh;
-      gap: 2px;
-      background: #000;
-    }
-    a {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
-    iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-      pointer-events: none;
-      background: #000;
-    }
-    /* Epilepsy Warning Modal */
-    #warning {
-      position: fixed;
-      z-index: 9999;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: rgba(0, 0, 0, 0.95);
-      color: white;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      text-align: center;
-      padding: 20px;
-      font-size: 18px;
-    }
+	html, body {
+	  margin: 0;
+	  padding: 0;
+	  display: grid;
+	  grid-template-columns: 1fr 1fr;
+	  grid-template-rows: repeat(4, 1fr);
+	  height: 100vh;
+	  gap: 2px;
+	  background: #000;
+	}
 
-    #warning h1 {
-      font-size: 32px;
-      margin-bottom: 20px;
-    }
+	.iframe-container {
+	  display: none; /* Hidden until warning is acknowledged */
+	  grid-column: span 2;
+	  display: grid;
+	  grid-template-columns: 1fr 1fr;
+	  grid-template-rows: repeat(4, 1fr);
+	  gap: 2px;
+	  width: 100%;
+	  height: 100%;
+	}
 
-    #continue-btn {
-      background-color: #ff6600;
-      color: white;
-      border: none;
-      padding: 15px 30px;
-      font-size: 20px;
-      cursor: pointer;
-      border-radius: 5px;
-      margin-top: 20px;
-    }
+	a {
+	  display: block;
+	  width: 100%;
+	  height: 100%;
+	}
 
-    #continue-btn:hover {
-      background-color: #ff4500;
-    }
+	iframe {
+	  width: 100%;
+	  height: 100%;
+	  border: none;
+	  pointer-events: none;
+	  background: #000;
+	}
 
-    /* Hide main layout until accepted */
-    body.hidden *:not(#warning) {
-      display: none;
-    }
+	#warning {
+	  position: fixed;
+	  z-index: 9999;
+	  top: 0;
+	  left: 0;
+	  width: 100%;
+	  height: 100%;
+	  background-color: rgba(0, 0, 0, 0.95);
+	  color: white;
+	  display: flex;
+	  flex-direction: column;
+	  justify-content: center;
+	  align-items: center;
+	  text-align: center;
+	  padding: 20px;
+	  font-size: 18px;
+	}
+
+	#warning h1 {
+	  font-size: 32px;
+	  margin-bottom: 20px;
+	}
+
+	#continue-btn {
+	  background-color: #ff6600;
+	  color: white;
+	  border: none;
+	  padding: 15px 30px;
+	  font-size: 20px;
+	  cursor: pointer;
+	  border-radius: 5px;
+	  margin-top: 20px;
+	}
+
+	#continue-btn:hover {
+	  background-color: #ff4500;
+	}
   </style>
 </head>
-<body class="hidden">
+<body>
+  <!-- Epilepsy Warning -->
   <div id="warning">
-    <h1>Epilepsy Warning</h1>
-    <p>This content may contain flashing lights or visual patterns that could trigger seizures for those with photosensitive epilepsy.</p>
-    <p>If you or someone watching has a history of seizures or epilepsy, consult a doctor before viewing.</p>
-    <p>If you experience discomfort (dizziness, nausea, visual disturbances), stop immediately.</p>
-    <button id="continue-btn">Continue</button>
+	<h1>Epilepsy Warning</h1>
+	<p>This content may contain flashing lights or visual patterns that could trigger seizures for those with photosensitive epilepsy.</p>
+	<p>If you or someone watching has a history of seizures or epilepsy, consult a doctor before viewing.</p>
+	<p>If you experience discomfort (dizziness, nausea, visual disturbances), stop immediately.</p>
+	<button id="continue-btn">Continue</button>
   </div>
 
-  <a href="./12D.html" title="12D"><iframe src="./12D.html"></iframe></a>
-  <a href="./causality.html" title="Causality"><iframe src="./causality.html"></iframe></a>
-  <a href="./oscillation.html" title="Oscillation"><iframe src="./oscillation.html"></iframe></a>
-  <a href="./spiral.html" title="Spiral"><iframe src="./spiral.html"></iframe></a>
-  <a href="./stringtheory.html" title="String Theory"><iframe src="./stringtheory.html"></iframe></a>
-  <a href="./tunnel.html" title="Tunnel"><iframe src="./tunnel.html"></iframe></a>
-  <a href="./crt.html" title="CRT"><iframe src="./crt.html"></iframe></a>
+  <!-- Hidden container for iframes -->
+  <div id="iframe-container" class="iframe-container"></div>
 
   <script>
-    document.getElementById('continue-btn').addEventListener('click', () => {
-      document.getElementById('warning').style.display = 'none';
-      document.body.classList.remove('hidden');
-    });
+	const pages = [
+	  { title: "12D", src: "./12D.html" },
+	  { title: "Causality", src: "./causality.html" },
+	  { title: "Oscillation", src: "./oscillation.html" },
+	  { title: "Spiral", src: "./spiral.html" },
+	  { title: "String Theory", src: "./stringtheory.html" },
+	  { title: "Tunnel", src: "./tunnel.html" },
+	  { title: "CRT", src: "./crt.html" }
+	];
+
+	document.getElementById("continue-btn").addEventListener("click", () => {
+	  // Hide warning
+	  document.getElementById("warning").style.display = "none";
+
+	  // Show iframe container
+	  const container = document.getElementById("iframe-container");
+	  container.style.display = "grid";
+
+	  // Inject iframes dynamically
+	  pages.forEach(({ title, src }) => {
+		const a = document.createElement("a");
+		a.href = src;
+		a.title = title;
+
+		const iframe = document.createElement("iframe");
+		iframe.src = src;
+
+		a.appendChild(iframe);
+		container.appendChild(a);
+	  });
+	});
   </script>
 </body>
 </html>
