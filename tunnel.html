@@ -13,48 +13,11 @@
 			font-family: Arial, sans-serif;
 		}
 
-		/* Style for the warning screen */
-		#warning {
-			position: fixed;
-			top: 0;
-			left: 0;
-			width: 100%;
-			height: 100%;
-			background-color: rgba(0, 0, 0, 0.8);
-			color: white;
-			display: flex;
-			justify-content: center;
-			align-items: center;
-			flex-direction: column;
-			text-align: center;
-			font-size: 18px;
-			z-index: 9999;
-		}
-
-		#warning h1 {
-			font-size: 32px;
-			margin-bottom: 20px;
-		}
-
-		#continue-btn {
-			background-color: #ff6600;
-			color: white;
-			border: none;
-			padding: 15px 30px;
-			font-size: 20px;
-			cursor: pointer;
-			border-radius: 5px;
-		}
-
-		#continue-btn:hover {
-			background-color: #ff4500;
-		}
-
 		/* Spinner shape layout with rotation animation */
 		.spinner {
 			position: fixed;
 			overflow: hidden;
-			display: none;
+			display: block; /* Always visible */
 		}
 
 		.spinner.top-left { top: 0; left: 0; width: 50%; height: 50%; transform: rotate(-30deg); animation: spin-cc 0.1s ease-in-out infinite; }
@@ -62,15 +25,14 @@
 		.spinner.bottom-left { bottom: 0; left: 0; width: 50%; height: 50%; transform: rotate(30deg); animation: spin-cc 0.1s ease-in-out infinite; }
 		.spinner.bottom-right { bottom: 0; right: 0; width: 50%; height: 50%; transform: rotate(-30deg); animation: spin-cc 0.1s ease-in-out infinite; }
 		.spinner.center-middle {
-		  top: 25%;
-		  left: 25%;
-		  width: 50%;
-		  height: 50%;
-		  transform: translate(50%, 50%) rotate(-30deg);
-		  animation: spin-ccw 0.1s ease-in-out infinite;
+			top: 25%;
+			left: 25%;
+			width: 50%;
+			height: 50%;
+			transform: translate(50%, 50%) rotate(-30deg);
+			animation: spin-ccw 0.1s ease-in-out infinite;
 		}
 
-		/* Rotate the spinner elements at 1 rotation per second */
 		@keyframes spin-cc {
 			from { transform: rotate(0deg); }
 			to { transform: rotate(360deg); }
@@ -88,14 +50,6 @@
 	</style>
 </head>
 <body>
-	<!-- Warning Screen -->
-	<div id="warning">
-		<h1>Epilepsy Warning</h1>
-		<p>Warning: This content may contain flashing lights, visual effects, or other stimuli that could potentially trigger seizures or other symptoms in individuals with epilepsy or related conditions.</p>
-		<p>If you have a history of epilepsy, seizures, or any other health concerns, please consult with a healthcare professional before engaging with this content.</p>
-		<p>If you experience any symptoms such as dizziness, nausea, or visual disturbances, stop viewing immediately and seek medical attention.</p>
-		<button id="continue-btn">Continue</button>
-	</div>
 
 	<!-- Fidget spinner layout with five canvases -->
 	<div class="spinner top-left"><canvas id="canvas1"></canvas></div>
@@ -116,7 +70,6 @@
 		let scale = 1;
 		let scaleIncrement = 0.01;
 
-		// Function to generate random color
 		function getRandomColor() {
 			const r = Math.floor(Math.random() * 256);
 			const g = Math.floor(Math.random() * 256);
@@ -124,7 +77,6 @@
 			return `rgb(${r}, ${g}, ${b})`;
 		}
 
-		// Setup and draw function for each canvas
 		function setupCanvas(canvas) {
 			const ctx = canvas.getContext('2d');
 			canvas.width = canvas.clientWidth;
@@ -155,7 +107,7 @@
 					ctx.beginPath();
 					ctx.arc(0, 0, radius, angle, 360);
 					ctx.lineWidth = 3;
-					ctx.strokeStyle = getRandomColor(); // Use a random color for each spiral
+					ctx.strokeStyle = getRandomColor();
 					ctx.stroke();
 					angle += Math.PI / 2;
 				}
@@ -173,16 +125,7 @@
 			animate();
 		}
 
-		// Show animation after clicking "Continue"
-		document.getElementById('continue-btn').addEventListener('click', function() {
-			document.getElementById('warning').style.display = 'none';
-
-			const spinners = document.querySelectorAll('.spinner');
-			spinners.forEach(spinner => spinner.style.display = 'block');
-
-			// Initialize each canvas
-			canvasElements.forEach(canvas => setupCanvas(canvas));
-		});
+		canvasElements.forEach(canvas => setupCanvas(canvas));
 	</script>
 </body>
 </html>
