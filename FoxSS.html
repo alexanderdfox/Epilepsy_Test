@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fox Fire Tail</title>
+<style>
+  body {
+	margin: 0;
+	background: #000;
+	overflow: hidden;Fox
+  }
+  canvas {
+	display: block;
+  }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+// --- Setup ---
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+resizeCanvas();
+window.addEventListener("resize", resizeCanvas);
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+
+// --- Load images ---
+const foxImg = new Image();
+foxImg.src = "fox.png";
+
+const tailImgs = [];
+for (let i = 1; i <= 5; i++) {
+  const img = new Image();
+  img.src = `tail${i}.png`;
+  tailImgs.push(img);
+}
+
+// --- Fire gradient helper ---
+function fireColor(life) {
+  // life = 1 (new) → bright yellow, 0 → dark red/black
+  if (life > 0.7) return `rgba(255, ${Math.floor(200 + life*55)}, 0, ${life})`;  // yellow-orange
+  if (life > 0.4) return `rgba(255, ${Math.floor(100 + life*150)}, 0, ${life})`; // orange
+  if (life > 0.1) return `rgba(${Math.floor(200*life)}, 30, 0, ${life})`;        // red
+  return `rgba(0,0,0,0)`; // fade out
+}
+
+// --- Fox object ---
+class Fox {
+  constructor(x, y) {
+	this.x = x;
+	this.y = y;
+	this.frame = 0;
+	this.frameTimer = 0;
+	this.particles = [];
+  }
+
+update(dt) {
+	  this.frameTimer += dt;
+	  if (this.frameTimer > 0.25) {
+		  this.frame = Math.floor(Math.random() * tailImgs.length);
+		  this.frameTimer = 0;
+	  }
+  
+	  // fire particles on the right side of the tail, slightly diagonal
+	  for (let i = 0; i < 2; i++) {
+		  this.particles.push({
+			  x: this.x + 125 + (Math.random() - 0.5) * 10, // move further right
+			  y: this.y + 85 + (Math.random() - 0.5) * 5,   // slightly below tail center
+			  life: 1,
+			  vx: 20 + Math.random() * 20,  // horizontal push to the right
+			  vy: -40 - Math.random() * 20, // slight upward diagonal
+			  size: 100 + Math.random() * 10
+		  });
+	  }
+  
+	  this.particles.forEach(p => {
+		  p.x += p.vx * dt;
+		  p.y += p.vy * dt;
+		  p.life -= dt * 1.2;
+	  });
+  
+	  this.particles = this.particles.filter(p => p.life > 0);
+  }
+
+
+draw(ctx) {
+	// fox body
+	if (foxImg.complete) ctx.drawImage(foxImg, this.x, this.y, 100, 100);
+	if (tailImgs[this.frame].complete) ctx.drawImage(tailImgs[this.frame], this.x + 70, this.y + 80, 40, 20);
+  
+	// fire particles (pixelated)
+	this.particles.forEach(p => {
+	  ctx.fillStyle = fireColor(p.life);
+  
+	  // define pixel size, e.g., 2-4px for small pixels
+	  const pixelSize = Math.max(1, Math.floor(p.size * p.life / 4));
+  
+	  // draw as small squares
+	  ctx.fillRect(p.x - pixelSize / 2, p.y - pixelSize / 2, pixelSize, pixelSize);
+	});
+  }
+}
+
+// --- Scene ---
+let foxes = [];
+function foxDraw() {
+  foxes = [];
+  for (let i = 0; i <= 15; i++) {
+	const x = Math.random() * canvas.width;
+	const y = Math.random() * canvas.height;
+	foxes.push(new Fox(x, y));
+  }
+}
+
+// schedule new fox set every 3s
+setInterval(foxDraw, 3000);
+foxDraw();
+
+// --- Game loop ---
+let last = 0;
+function loop(ts) {
+  const dt = (ts - last) / 1000;
+  last = ts;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  foxes.forEach(f => {
+	f.update(dt);
+	f.draw(ctx);
+  });
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>
