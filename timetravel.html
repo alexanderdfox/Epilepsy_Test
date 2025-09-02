@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Travel Art - Forward & Backward</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #000;
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: white;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+        }
+
+        .container {
+            display: flex;
+            gap: 10px;
+            max-width: 100%;
+        }
+
+        .pane {
+            position: relative;
+        }
+
+        .pane-label {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 10;
+        }
+
+        .forward-label {
+            color: #00ff00;
+        }
+
+        .backward-label {
+            color: #ff0080;
+        }
+
+        canvas {
+            border: 2px solid #333;
+            border-radius: 5px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+        }
+
+        .controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .control-group {
+            margin: 10px 0;
+        }
+
+        label {
+            margin-right: 10px;
+            color: #00ffff;
+        }
+
+        input[type="range"] {
+            width: 200px;
+            margin-right: 10px;
+        }
+
+        .value-display {
+            display: inline-block;
+            min-width: 60px;
+            color: #ffff00;
+        }
+
+        .info {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 14px;
+            color: #888;
+            max-width: 800px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Time Travel Art - Forward & Backward</h1>
+    
+    <div class="container">
+        <div class="pane">
+            <div class="pane-label forward-label">Forward Time</div>
+            <canvas id="forwardCanvas" width="400" height="400"></canvas>
+        </div>
+        <div class="pane">
+            <div class="pane-label backward-label">Backward Time</div>
+            <canvas id="backwardCanvas" width="400" height="400"></canvas>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label>Speed:</label>
+            <input type="range" id="speedSlider" min="100" max="2000" value="1000" step="100">
+            <span class="value-display" id="speedValue">1000</span>
+        </div>
+        <div class="control-group">
+            <label>Time Scale:</label>
+            <input type="range" id="timeScaleSlider" min="0.001" max="0.01" value="0.001" step="0.001">
+            <span class="value-display" id="timeScaleValue">0.001</span>
+        </div>
+    </div>
+
+    <div class="info">
+        <p>This visualization demonstrates relativistic time dilation effects. The left pane shows forward time travel, 
+        while the right pane shows backward time travel. Colors represent the complex interplay between 
+        Lorentz time dilation and gravitational time dilation effects.</p>
+    </div>
+
+    <script>
+        // Canvas setup
+        const forwardCanvas = document.getElementById('forwardCanvas');
+        const backwardCanvas = document.getElementById('backwardCanvas');
+        const forwardCtx = forwardCanvas.getContext('2d');
+        const backwardCtx = backwardCanvas.getContext('2d');
+
+        // Constants
+        const WIDTH = 400;
+        const HEIGHT = 400;
+        const C = 3e8; // Speed of light
+        const G = 6.674e-11; // Gravitational constant
+        const M = 5.97e24; // Mass of Earth
+
+        // Animation variables
+        let t = 0;
+        let speed = 1000;
+        let timeScale = 0.001;
+        let animationId;
+
+        // Color mapping function
+        function colorMap(value, maxVal = 2.0) {
+            const norm = (value + maxVal) / (2 * maxVal);
+            const r = (Math.sin(norm * Math.PI * 2) + 1) / 2;
+            const g = (Math.sin(norm * Math.PI * 4) + 1) / 2;
+            const b = (Math.sin(norm * Math.PI * 6) + 1) / 2;
+            return `rgb(${Math.floor(r * 255)}, ${Math.floor(g * 255)}, ${Math.floor(b * 255)})`;
+        }
+
+        // Lorentz factor (time dilation)
+        function lorentzFactor(v) {
+            v = Math.min(Math.abs(v), C * 0.999999);
+            return 1.0 / Math.sqrt(1 - (v / C) ** 2);
+        }
+
+        // Gravitational time dilation
+        function gravDilation(r) {
+            const denom = (r * C ** 2 + 1e-9);
+            const val = 1 - (2 * G * M) / denom;
+            return Math.sqrt(Math.abs(val));
+        }
+
+        // Create image data for one pane
+        function createPaneData(direction) {
+            const imageData = forwardCtx.createImageData(WIDTH, HEIGHT);
+            const data = imageData.data;
+
+            for (let i = 0; i < HEIGHT; i++) {
+                for (let j = 0; j < WIDTH; j++) {
+                    const r = Math.sqrt((i - HEIGHT / 2) ** 2 + (j - WIDTH / 2) ** 2) + 1;
+                    const v = direction * (t + i + j) * 1e5;
+                    const gamma = lorentzFactor(v);
+                    const dilation = gravDilation(r * 1e3);
+                    const value = gamma * dilation * Math.sin(t * timeScale + r * 0.01);
+                    
+                    const color = colorMap(value);
+                    const rgb = color.match(/\d+/g).map(Number);
+                    
+                    const index = (i * WIDTH + j) * 4;
+                    data[index] = rgb[0];     // R
+                    data[index + 1] = rgb[1]; // G
+                    data[index + 2] = rgb[2]; // B
+                    data[index + 3] = 255;    // A
+                }
+            }
+            
+            return imageData;
+        }
+
+        // Draw both panes
+        function draw() {
+            // Create image data for both panes
+            const forwardData = createPaneData(1);
+            const backwardData = createPaneData(-1);
+
+            // Draw forward pane
+            forwardCtx.putImageData(forwardData, 0, 0);
+            
+            // Draw backward pane
+            backwardCtx.putImageData(backwardData, 0, 0);
+
+            // Update time
+            t += speed;
+        }
+
+        // Animation loop
+        function animate() {
+            draw();
+            animationId = requestAnimationFrame(animate);
+        }
+
+        // Event listeners for controls
+        document.getElementById('speedSlider').addEventListener('input', function(e) {
+            speed = parseInt(e.target.value);
+            document.getElementById('speedValue').textContent = speed;
+        });
+
+        document.getElementById('timeScaleSlider').addEventListener('input', function(e) {
+            timeScale = parseFloat(e.target.value);
+            document.getElementById('timeScaleValue').textContent = timeScale.toFixed(3);
+        });
+
+        // Start animation
+        animate();
+
+        // Pause/resume on click
+        let isPaused = false;
+        document.addEventListener('click', function() {
+            if (isPaused) {
+                animate();
+                isPaused = false;
+            } else {
+                cancelAnimationFrame(animationId);
+                isPaused = true;
+            }
+        });
+
+        // Keyboard controls
+        document.addEventListener('keydown', function(e) {
+            switch(e.key) {
+                case ' ':
+                    e.preventDefault();
+                    if (isPaused) {
+                        animate();
+                        isPaused = false;
+                    } else {
+                        cancelAnimationFrame(animationId);
+                        isPaused = true;
+                    }
+                    break;
+                case 'r':
+                    t = 0;
+                    break;
+                case 'ArrowUp':
+                    speed = Math.min(speed + 100, 2000);
+                    document.getElementById('speedSlider').value = speed;
+                    document.getElementById('speedValue').textContent = speed;
+                    break;
+                case 'ArrowDown':
+                    speed = Math.max(speed - 100, 100);
+                    document.getElementById('speedSlider').value = speed;
+                    document.getElementById('speedValue').textContent = speed;
+                    break;
+            }
+        });
+
+        // Instructions
+        console.log('Controls:');
+        console.log('Space - Pause/Resume');
+        console.log('R - Reset time');
+        console.log('Arrow Up/Down - Adjust speed');
+        console.log('Click - Pause/Resume');
+    </script>
+</body>
+</html>
