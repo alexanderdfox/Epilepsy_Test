@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Bouncing Bodies Simulation</title>
+<style>
+	body { margin: 0; overflow: hidden; background-color: #111; font-family: Arial, sans-serif; }
+	canvas { display: block; }
+	#info { position: absolute; top: 10px; left: 10px; color: white; z-index: 100; }
+</style>
+</head>
+<body>
+<div id="info">Loading...</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+	// Check if Three.js loaded
+	if (typeof THREE === 'undefined') {
+		document.getElementById('info').innerHTML = 'ERROR: Three.js failed to load!';
+		throw new Error('Three.js not loaded');
+	}
+	
+	document.getElementById('info').innerHTML = 'Three.js loaded! Starting simulation...';
+
+	try {
+		// --- Scene setup ---
+		const scene = new THREE.Scene();
+		scene.background = new THREE.Color(0x111111);
+		const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 5000);
+		camera.position.set(0, 0, 800);
+
+		const renderer = new THREE.WebGLRenderer({antialias: true});
+		renderer.setSize(window.innerWidth, window.innerHeight);
+		document.body.appendChild(renderer.domElement);
+
+		// Check if OrbitControls is available
+		let controls;
+		if (typeof THREE.OrbitControls !== 'undefined') {
+			controls = new THREE.OrbitControls(camera, renderer.domElement);
+			controls.enableDamping = true;
+			controls.dampingFactor = 0.05;
+			document.getElementById('info').innerHTML = 'OrbitControls loaded!';
+		} else {
+			document.getElementById('info').innerHTML = 'OrbitControls not available, using basic camera';
+		}
+
+	// Enhanced lighting
+	const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+	scene.add(ambient);
+	
+	const pointLight1 = new THREE.PointLight(0xffffff, 0.8);
+	pointLight1.position.set(500, 500, 500);
+	scene.add(pointLight1);
+	
+	const pointLight2 = new THREE.PointLight(0x64c8ff, 0.4);
+	pointLight2.position.set(-500, -500, -500);
+	scene.add(pointLight2);
+	
+	const directionalLight = new THREE.DirectionalLight(0xffffff, 0.3);
+	directionalLight.position.set(0, 1000, 0);
+	scene.add(directionalLight);
+
+	// --- Parameters ---
+	const N_BODIES = 3;
+	const G = 0.5; // Reduced gravity to keep bodies more contained
+	const DT = 0.005; // Smaller timestep for more stable simulation
+	const DRAG_COEFF = 0.03; // Increased drag for stability
+	const VORTEX_STRENGTH = 10; // Reduced vortex strength
+	const TORUS_RADIUS = 200; // Major radius
+	const TORUS_TUBE_RADIUS = 100; // Minor radius
+
+		// --- Bodies ---
+		const masses = [];
+		const positions = [];
+		const velocities = [];
+		const spheres = [];
+		const trails = [];
+
+		const colors = [0x64c8ff, 0xffc864, 0x64ff96];
+
+	for(let i=0;i<N_BODIES;i++){
+		masses.push(1 + Math.random());
+		
+		// Place bodies in a small circle that's guaranteed to be inside the torus
+		// Use a radius that's much smaller than the torus tube radius
+		const safeRadius = 30; // Much smaller than TORUS_TUBE_RADIUS (100)
+		const angle = Math.random() * Math.PI * 2;
+		const distance = Math.random() * safeRadius;
+		
+		// Place them in a small circular area near the torus center
+		const x = distance * Math.cos(angle);
+		const y = (Math.random() - 0.5) * 60; // Small vertical spread
+		const z = distance * Math.sin(angle);
+		
+		// Offset to be near the torus (but inside the hole)
+		const torusOffset = TORUS_RADIUS - 50; // Inside the torus hole
+		const position = new THREE.Vector3(
+			x + torusOffset,
+			y,
+			z
+		);
+		
+		positions.push(position);
+		
+		// Give them very small initial velocity to keep them contained
+		velocities.push(new THREE.Vector3(
+			(Math.random()-0.5)*15,
+			(Math.random()-0.5)*15,
+			(Math.random()-0.5)*15
+		));
+
+		const geo = new THREE.SphereGeometry(6 + masses[i]*2, 32, 32);
+		const mat = new THREE.MeshStandardMaterial({
+			color: colors[i],
+			emissive: new THREE.Color(colors[i]).multiplyScalar(0.1),
+			metalness: 0.3,
+			roughness: 0.4
+		});
+		const sphere = new THREE.Mesh(geo, mat);
+		scene.add(sphere);
+		spheres.push(sphere);
+		
+		// Add white outline
+		const outlineGeo = new THREE.SphereGeometry(6 + masses[i]*2 + 0.5, 32, 32);
+		const outlineMat = new THREE.MeshBasicMaterial({
+			color: 0xffffff,
+			transparent: true,
+			opacity: 0.3,
+			wireframe: true
+		});
+		const outline = new THREE.Mesh(outlineGeo, outlineMat);
+		sphere.add(outline);
+
+			trails.push([]);
+		}
+
+		// --- Helper functions ---
+		function computeAccelerations() {
+			const acc = positions.map(_=>new THREE.Vector3());
+			for(let i=0;i<N_BODIES;i++){
+				for(let j=i+1;j<N_BODIES;j++){
+					const r = positions[j].clone().sub(positions[i]);
+					const dist2 = r.lengthSq() + 1e-5;
+					const dist = Math.sqrt(dist2);
+					const strength = G / dist2;
+					const force = r.clone().multiplyScalar(strength * masses[i] * masses[j]);
+					acc[i].add(force.clone().divideScalar(masses[i]));
+					acc[j].sub(force.clone().divideScalar(masses[j]));
+				}
+			}
+			// Fluid damping & vortex
+			const center = new THREE.Vector3();
+			positions.forEach(p=>center.add(p.clone()));
+			center.divideScalar(N_BODIES);
+
+			for(let i=0;i<N_BODIES;i++){
+				acc[i].sub(velocities[i].clone().multiplyScalar(DRAG_COEFF));
+				const r = positions[i].clone().sub(center);
+				const perp = new THREE.Vector3(-r.y, r.x, 0);
+				acc[i].add(perp.multiplyScalar(VORTEX_STRENGTH / (r.length() + 1e-5)));
+			}
+			return acc;
+		}
+
+	function handleBounce() {
+		for(let i=0;i<N_BODIES;i++){
+			const pos = positions[i];
+			const x = pos.x;
+			const y = pos.y;
+			const z = pos.z;
+			
+			// Calculate distance from torus center axis
+			const distanceFromCenter = Math.sqrt(x*x + z*z);
+			
+			// Check if point is inside torus bounds
+			const distanceFromTorusAxis = Math.abs(distanceFromCenter - TORUS_RADIUS);
+			const distanceFromTorusCenter = Math.sqrt(distanceFromTorusAxis * distanceFromTorusAxis + y*y);
+			
+			// Add some margin to prevent bodies from getting too close to the edge
+			const margin = 20;
+			const effectiveTubeRadius = TORUS_TUBE_RADIUS - margin;
+			
+			if (distanceFromTorusCenter > effectiveTubeRadius) {
+				// Point is outside torus, force it back inside
+				const theta = Math.atan2(z, x);
+				const torusCenterX = Math.cos(theta) * TORUS_RADIUS;
+				const torusCenterZ = Math.sin(theta) * TORUS_RADIUS;
+				const torusCenterY = 0;
+				
+				// Vector from torus center to particle
+				const toParticle = new THREE.Vector3(x - torusCenterX, y - torusCenterY, z - torusCenterZ);
+				toParticle.normalize();
+				
+				// Move particle to safe position inside torus
+				const surfacePos = new THREE.Vector3(
+					torusCenterX + toParticle.x * effectiveTubeRadius,
+					torusCenterY + toParticle.y * effectiveTubeRadius,
+					torusCenterZ + toParticle.z * effectiveTubeRadius
+				);
+				
+				positions[i].copy(surfacePos);
+				
+				// Reflect velocity with some damping to prevent oscillation
+				const velocityDotNormal = velocities[i].dot(toParticle);
+				if (velocityDotNormal > 0) { // Only reflect if moving outward
+					velocities[i].sub(toParticle.clone().multiplyScalar(2 * velocityDotNormal));
+					// Add some damping to prevent infinite bouncing
+					velocities[i].multiplyScalar(0.95);
+				}
+			}
+		}
+	}
+
+	// Torus visualization
+	const torusGeo = new THREE.TorusGeometry(TORUS_RADIUS, TORUS_TUBE_RADIUS, 16, 32);
+	const torusMat = new THREE.MeshBasicMaterial({color:0xffffff, wireframe:true, opacity:0.3, transparent:true});
+	const torusMesh = new THREE.Mesh(torusGeo, torusMat);
+	scene.add(torusMesh);
+
+		// Debug: Log initial positions
+		console.log('Initial positions:', positions.map(p => ({x: p.x.toFixed(1), y: p.y.toFixed(1), z: p.z.toFixed(1)})));
+		
+		document.getElementById('info').innerHTML = `
+			<div style="font-size: 18px; margin-bottom: 10px;">
+				<strong>Torus simulation running!</strong> Bodies bounce within the donut shape.
+			</div>
+			<div style="font-size: 14px; color: #ccc;">
+				Mouse Controls: Left=drag orbit, Right=pan, Scroll=zoom<br>
+				Physics: ${N_BODIES} bodies with gravity, drag, and vortex effects<br>
+				Boundary: Torus with ${TORUS_RADIUS} radius, ${TORUS_TUBE_RADIUS} tube radius<br>
+				Debug: Check console for initial positions
+			</div>
+		`;
+
+		// --- Animation loop ---
+		function animate(){
+			requestAnimationFrame(animate);
+
+			// Physics update
+			const acc = computeAccelerations();
+			for(let i=0;i<N_BODIES;i++){
+				velocities[i].add(acc[i].clone().multiplyScalar(DT));
+				positions[i].add(velocities[i].clone().multiplyScalar(DT));
+			}
+
+			handleBounce();
+
+			// Update spheres & trails
+			for(let i=0;i<N_BODIES;i++){
+				spheres[i].position.copy(positions[i]);
+
+				// Enhanced trails with opacity gradient
+				trails[i].push(positions[i].clone());
+				if(trails[i].length > 200) trails[i].shift();
+				if(spheres[i].trailLine) scene.remove(spheres[i].trailLine);
+
+				if(trails[i].length > 1) {
+					const trailGeo = new THREE.BufferGeometry().setFromPoints(trails[i]);
+					const trailMat = new THREE.LineBasicMaterial({
+						color: colors[i], 
+						linewidth: 3, 
+						transparent: true, 
+						opacity: 0.8,
+						vertexColors: true
+					});
+					
+					// Add vertex colors for gradient effect
+					const colors_array = [];
+					for(let j = 0; j < trails[i].length; j++) {
+						const alpha = j / trails[i].length;
+						const color = new THREE.Color(colors[i]);
+						color.multiplyScalar(alpha * 0.8 + 0.2);
+						colors_array.push(color.r, color.g, color.b);
+					}
+					trailGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors_array, 3));
+					
+					const trailLine = new THREE.Line(trailGeo, trailMat);
+					scene.add(trailLine);
+					spheres[i].trailLine = trailLine;
+				}
+			}
+
+			if (controls) controls.update();
+			renderer.render(scene, camera);
+		}
+		animate();
+
+		// --- Resize handler ---
+		window.addEventListener('resize', ()=>{
+			camera.aspect = window.innerWidth/window.innerHeight;
+			camera.updateProjectionMatrix();
+			renderer.setSize(window.innerWidth, window.innerHeight);
+		});
+
+	} catch (error) {
+		document.getElementById('info').innerHTML = 'ERROR: ' + error.message;
+		console.error('Simulation error:', error);
+	}
+
+</script>
+</body>
+</html>
