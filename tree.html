@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Procedural Tree with Fruit</title>
+    <style>
+        html, body { margin: 0; height: 100%; background: #0b0f14; color: #eee; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+        #info { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.35); padding: 10px 12px; border-radius: 8px; max-width: 420px; line-height: 1.35; }
+        #controls { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.35); padding: 10px 12px; border-radius: 8px; width: 280px; }
+        .label { font-weight: 600; margin-bottom: 6px; }
+        .slider { width: 100%; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <div id="info"></div>
+    <div id="controls">
+        <div class="label">Temperature: <span id="tempValue">20</span>°C</div>
+        <input type="range" id="tempSlider" class="slider" min="0" max="100" value="20">
+        <div class="label">Effects:</div>
+        <div style="font-size: 12px; color: #ccc;">
+            • Growth speed<br>
+            • Branching probability<br>
+            • Fruit growth and ripening
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script>
+    // Error handling
+    window.addEventListener('error', (e) => {
+        try {
+            const msg = (e && (e.error || e.message)) ? (e.error && e.error.stack ? e.error.stack : e.message) : 'Unknown error';
+            const el = document.getElementById('info');
+            if (el) {
+                const p = document.createElement('div');
+                p.style.color = '#ff6b6b';
+                p.style.marginTop = '8px';
+                p.textContent = 'JavaScript Error: ' + msg;
+                el.appendChild(p);
+            }
+            console.error(msg);
+        } catch(err) { console.error(err); }
+    });
+
+    // Scene setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 5000);
+    camera.position.set(0, 60, 220);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x0b0f14, 1);
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    // Lights
+    const hemi = new THREE.HemisphereLight(0x7090ff, 0x404040, 0.6);
+    scene.add(hemi);
+    const key = new THREE.DirectionalLight(0xffffff, 0.9);
+    key.position.set(50, 120, 80);
+    scene.add(key);
+    const fill = new THREE.PointLight(0x88aaff, 0.4);
+    fill.position.set(-120, 80, -60);
+    scene.add(fill);
+
+    // Ground plane (subtle)
+    {
+        const geo = new THREE.CircleGeometry(400, 64);
+        const mat = new THREE.MeshStandardMaterial({ color: 0x0f141b, roughness: 0.9, metalness: 0.0 });
+        const ground = new THREE.Mesh(geo, mat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -1;
+        scene.add(ground);
+    }
+
+    // Temperature system
+    let temperature = 20; // Celsius
+    function getTemperatureColor(t) {
+        try {
+            const clamped = Math.max(0, Math.min(100, Number.isFinite(t) ? t : 20));
+            // Blue (cold) -> Purple -> Red (hot)
+            const r = Math.floor((clamped / 100) * 255);
+            const g = Math.floor((1 - Math.abs(clamped - 50) / 50) * 80);
+            const b = Math.floor((1 - clamped / 100) * 255);
+            return (r << 16) | (g << 8) | b;
+        } catch(_) { return 0x4466cc; }
+    }
+
+    function setupTemperatureSlider() {
+        const slider = document.getElementById('tempSlider');
+        const valueEl = document.getElementById('tempValue');
+        if (!slider || !valueEl) return;
+        slider.addEventListener('input', () => {
+            const v = parseFloat(slider.value);
+            if (!Number.isFinite(v)) return;
+            temperature = v;
+            valueEl.textContent = v.toString();
+            updateTemperatureVisuals();
+        });
+    }
+
+    function updateTemperatureVisuals() {
+        const c = getTemperatureColor(temperature);
+        // Tint lights slightly with temperature for mood
+        key.color.setHex(c);
+        fill.color.setHex(c);
+        hemi.color.setHex(c);
+    }
+
+    document.addEventListener('DOMContentLoaded', setupTemperatureSlider);
+
+    // Tree growth system
+    const MAX_BRANCHES = 1200;
+    const MAX_DEPTH = 8;
+    const INITIAL_BRANCH_RADIUS = 3.2;
+    const MIN_RADIUS = 0.35;
+    const SEGMENT_LENGTH = 6.0;
+    const BRANCH_SPREAD = 0.42; // radians
+    const BASE_BRANCH_PROB = 0.22;
+    const FRUIT_SPAWN_PROB = 0.06; // per mature segment
+    const FRUIT_MAX = 300;
+    const FRUIT_MAX_SIZE = 4.5;
+
+    const branches = []; // { start, end, dir, length, radius, depth, age, mesh, alive }
+    const tips = []; // indices of branch tips (alive)
+    const fruits = []; // { position, size, ripeness(0..1), growthRate, mesh, attachedTo }
+
+    const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x6b4f2a, roughness: 0.85, metalness: 0.05 });
+    const woodWireMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.06 });
+    const fruitMaterial = new THREE.MeshStandardMaterial({ color: 0x66bb44, roughness: 0.55, metalness: 0.15, emissive: 0x000000 });
+
+    function createBranchMesh(length, radiusTop, radiusBottom) {
+        const geo = new THREE.CylinderGeometry(radiusTop, radiusBottom, length, 8, 1, false);
+        const mesh = new THREE.Mesh(geo, woodMaterial.clone());
+        const wire = new THREE.Mesh(geo.clone(), woodWireMaterial);
+        mesh.add(wire);
+        return mesh;
+    }
+
+    function addBranch(start, dir, radius, depth) {
+        const length = 0.01; // start tiny and grow to SEGMENT_LENGTH
+        const end = start.clone().add(dir.clone().multiplyScalar(length));
+        const mesh = createBranchMesh(length, Math.max(radius * 0.9, MIN_RADIUS), Math.max(radius, MIN_RADIUS));
+        mesh.position.copy(start.clone().add(end).multiplyScalar(0.5));
+        // Orient cylinder along dir
+        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+        scene.add(mesh);
+        const idx = branches.length;
+        branches.push({ start: start.clone(), end: end.clone(), dir: dir.clone().normalize(), length, radius, depth, age: 0, mesh, alive: true });
+        tips.push(idx);
+        return idx;
+    }
+
+    function growBranch(i, dt) {
+        const b = branches[i];
+        if (!b || !b.alive) return;
+        // Growth speed scales with temperature
+        const tempFactor = 0.4 + (temperature / 100) * 1.2; // 0.4..1.6
+        const grow = dt * SEGMENT_LENGTH * 0.8 * tempFactor * (1.0 - b.depth / (MAX_DEPTH + 1));
+        b.length = Math.min(SEGMENT_LENGTH, b.length + grow);
+        b.end.copy(b.start).add(b.dir.clone().multiplyScalar(b.length));
+        b.age += dt;
+
+        // Update mesh to reflect new length
+        const radiusTop = Math.max(b.radius * 0.85, MIN_RADIUS);
+        const radiusBottom = Math.max(b.radius, MIN_RADIUS);
+        const newGeo = new THREE.CylinderGeometry(radiusTop, radiusBottom, b.length, 8, 1, false);
+        b.mesh.geometry.dispose();
+        b.mesh.geometry = newGeo;
+        b.mesh.position.copy(b.start.clone().add(b.end).multiplyScalar(0.5));
+        b.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.dir);
+
+        // When segment reaches full length, potentially branch
+        if (b.length >= SEGMENT_LENGTH - 1e-3) {
+            // This tip is no longer a growing tip
+            b.alive = false;
+            const tipIndex = tips.indexOf(i);
+            if (tipIndex !== -1) tips.splice(tipIndex, 1);
+
+            if (branches.length < MAX_BRANCHES && b.depth < MAX_DEPTH) {
+                const tempBias = temperature / 100; // 0..1
+                const branchProb = BASE_BRANCH_PROB + 0.25 * tempBias; // higher temp -> more branching
+
+                // Main continuation
+                const bend = (Math.random() - 0.5) * BRANCH_SPREAD * (0.6 + 0.8 * tempBias);
+                const yaw = (Math.random() - 0.5) * BRANCH_SPREAD * 1.2;
+                const dirMain = b.dir.clone()
+                    .applyAxisAngle(new THREE.Vector3(1,0,0), bend)
+                    .applyAxisAngle(new THREE.Vector3(0,1,0), yaw)
+                    .normalize();
+                addBranch(b.end, dirMain, b.radius * (0.86 + Math.random()*0.04), b.depth + 1);
+
+                // Optional side branch
+                if (Math.random() < branchProb) {
+                    const sideBend = (0.6 + Math.random()*0.6) * BRANCH_SPREAD;
+                    const sideYaw = (Math.random() * Math.PI * 2);
+                    const axis = new THREE.Vector3(Math.cos(sideYaw), 0, Math.sin(sideYaw)).normalize();
+                    const dirSide = b.dir.clone()
+                        .applyAxisAngle(axis, sideBend)
+                        .normalize();
+                    addBranch(b.end, dirSide, b.radius * (0.8 + Math.random()*0.07), b.depth + 1);
+                }
+            }
+
+            // Fruit spawn chance on mature branches
+            if (fruits.length < FRUIT_MAX && b.depth >= 2 && Math.random() < FRUIT_SPAWN_PROB) {
+                spawnFruitOnBranch(b);
+            }
+        }
+    }
+
+    function ripenessColor(r) {
+        // 0 -> green (unripe), 1 -> red (ripe)
+        const rr = Math.floor(100 + 155 * r);
+        const gg = Math.floor(220 - 160 * r);
+        const bb = Math.floor(80 - 60 * r);
+        return (rr << 16) | (gg << 8) | Math.max(0, bb);
+    }
+
+    function spawnFruitOnBranch(branch) {
+        const attach = branch;
+        const t = 0.25 + Math.random() * 0.5; // along the segment
+        const pos = branch.start.clone().lerp(branch.end, t);
+        // small offset outward from branch normal
+        const normal = new THREE.Vector3(0,1,0).cross(branch.dir).normalize();
+        pos.add(normal.multiplyScalar(1.2 + Math.random()*0.8));
+
+        const size = 0.4; // start small
+        const geo = new THREE.SphereGeometry(size, 16, 16);
+        const mat = fruitMaterial.clone();
+        mat.color.setHex(ripenessColor(0));
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.copy(pos);
+        scene.add(mesh);
+
+        const growthRate = 0.3 + (temperature / 100) * 0.9; // faster in heat
+        fruits.push({ position: pos, size, ripeness: 0, growthRate, mesh, attachedTo: attach });
+    }
+
+    function updateFruits(dt) {
+        for (let i = 0; i < fruits.length; i++) {
+            const f = fruits[i];
+            // Grow size
+            f.size = Math.min(FRUIT_MAX_SIZE, f.size + dt * f.growthRate);
+            // Update geometry to reflect growth
+            f.mesh.geometry.dispose();
+            f.mesh.geometry = new THREE.SphereGeometry(f.size, 16, 16);
+            // Ripen with temperature
+            const ripenSpeed = 0.05 + (temperature / 100) * 0.35;
+            f.ripeness = Math.min(1, f.ripeness + dt * ripenSpeed);
+            f.mesh.material.color.setHex(ripenessColor(f.ripeness));
+            // Subtle emissive glow as it ripens
+            f.mesh.material.emissive = new THREE.Color(ripenessColor(f.ripeness)).multiplyScalar(0.15 * f.ripeness);
+        }
+    }
+
+    // Seed the tree with a trunk
+    (function seedTree(){
+        const start = new THREE.Vector3(0, 0, 0);
+        const dir = new THREE.Vector3(0, 1, 0).normalize();
+        addBranch(start, dir, INITIAL_BRANCH_RADIUS, 0);
+    })();
+
+    // Info
+    document.getElementById('info').innerHTML = `
+        <div style="font-size: 18px; margin-bottom: 10px;">
+            <strong>Procedural Tree Growth</strong> — Branches and Fruit Over Time
+        </div>
+        <div style="font-size: 14px; color: #ccc;">
+            Mouse: Left=orbit, Right=pan, Scroll=zoom<br>
+            Growth: Temperature increases speed and branching rate<br>
+            Fruit: Spawns on mature branches, grows and ripens with heat
+        </div>
+    `;
+
+    // Resize
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Animate
+    let lastT = performance.now();
+    function animate(){
+        requestAnimationFrame(animate);
+        const now = performance.now();
+        const dt = Math.min(0.05, (now - lastT) / 1000); // clamp dt
+        lastT = now;
+
+        // Grow tips
+        const tipSnapshot = tips.slice();
+        for (let k = 0; k < tipSnapshot.length; k++) {
+            const i = tipSnapshot[k];
+            growBranch(i, dt);
+        }
+
+        // Fruits
+        updateFruits(dt);
+
+        controls.update();
+        renderer.render(scene, camera);
+    }
+    animate();
+    </script>
+</body>
+</html>
+
+
