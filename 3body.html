@@ -1,305 +1,666 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>3D Bouncing Bodies Simulation</title>
-<style>
-	body { margin: 0; overflow: hidden; background-color: #111; font-family: Arial, sans-serif; }
-	canvas { display: block; }
-	#info { position: absolute; top: 10px; left: 10px; color: white; z-index: 100; }
-</style>
+	<title>Conway's Game of Life + Free Will in Torus</title>
+	<style>
+		body { margin: 0; background: #111; color: #fff; font-family: Arial, sans-serif; }
+		#info { position: absolute; top: 10px; left: 10px; z-index: 100; }
+	</style>
 </head>
 <body>
-<div id="info">Loading...</div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-
-<script>
-	// Check if Three.js loaded
-	if (typeof THREE === 'undefined') {
-		document.getElementById('info').innerHTML = 'ERROR: Three.js failed to load!';
-		throw new Error('Three.js not loaded');
-	}
-	
-	document.getElementById('info').innerHTML = 'Three.js loaded! Starting simulation...';
-
-	try {
-		// --- Scene setup ---
+	<div id="info"></div>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+	<script>
+		// Error handling and debugging
+		window.addEventListener('error', function(e) {
+			console.error('JavaScript Error:', e.error);
+			document.getElementById('info').innerHTML = `
+				<div style="font-size: 18px; margin-bottom: 10px; color: #ff4444;">
+					<strong>Error Loading Simulation!</strong>
+				</div>
+				<div style="font-size: 14px; color: #ccc;">
+					Check browser console for details.<br>
+					Make sure JavaScript is enabled.
+				</div>
+			`;
+		});
+		
+		// Check if Three.js loaded
+		if (typeof THREE === 'undefined') {
+			console.error('Three.js failed to load');
+			document.getElementById('info').innerHTML = `
+				<div style="font-size: 18px; margin-bottom: 10px; color: #ff4444;">
+					<strong>Three.js Failed to Load!</strong>
+				</div>
+				<div style="font-size: 14px; color: #ccc;">
+					Please check your internet connection and try again.
+				</div>
+			`;
+		} else {
+			console.log('Three.js loaded successfully, version:', THREE.REVISION);
+		}
+	</script>
+	<script>
+		// --- Scene Setup ---
 		const scene = new THREE.Scene();
-		scene.background = new THREE.Color(0x111111);
-		const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 5000);
-		camera.position.set(0, 0, 800);
-
-		const renderer = new THREE.WebGLRenderer({antialias: true});
+		const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+		const renderer = new THREE.WebGLRenderer({ antialias: true });
 		renderer.setSize(window.innerWidth, window.innerHeight);
+		renderer.setClearColor(0x111111);
 		document.body.appendChild(renderer.domElement);
 
-		// Check if OrbitControls is available
-		let controls;
-		if (typeof THREE.OrbitControls !== 'undefined') {
-			controls = new THREE.OrbitControls(camera, renderer.domElement);
-			controls.enableDamping = true;
-			controls.dampingFactor = 0.05;
-			document.getElementById('info').innerHTML = 'OrbitControls loaded!';
-		} else {
-			document.getElementById('info').innerHTML = 'OrbitControls not available, using basic camera';
-		}
+		// --- Controls ---
+		const controls = new THREE.OrbitControls(camera, renderer.domElement);
+		controls.enableDamping = true;
+		controls.dampingFactor = 0.05;
+		camera.position.set(0, 0, 500);
 
-	// Enhanced lighting
-	const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-	scene.add(ambient);
-	
-	const pointLight1 = new THREE.PointLight(0xffffff, 0.8);
-	pointLight1.position.set(500, 500, 500);
-	scene.add(pointLight1);
-	
-	const pointLight2 = new THREE.PointLight(0x64c8ff, 0.4);
-	pointLight2.position.set(-500, -500, -500);
-	scene.add(pointLight2);
-	
-	const directionalLight = new THREE.DirectionalLight(0xffffff, 0.3);
-	directionalLight.position.set(0, 1000, 0);
-	scene.add(directionalLight);
-
-	// --- Parameters ---
-	const N_BODIES = 3;
-	const G = 0.5; // Reduced gravity to keep bodies more contained
-	const DT = 0.005; // Smaller timestep for more stable simulation
-	const DRAG_COEFF = 0.03; // Increased drag for stability
-	const VORTEX_STRENGTH = 10; // Reduced vortex strength
-	const TORUS_RADIUS = 200; // Major radius
-	const TORUS_TUBE_RADIUS = 100; // Minor radius
-
-		// --- Bodies ---
-		const masses = [];
-		const positions = [];
-		const velocities = [];
-		const spheres = [];
-		const trails = [];
-
+		// --- Conway's Game of Life + Free Will in Torus ---
+		const GRID_SIZE = 20; // 20x20x20 grid
+		const CELL_SPACING = 15; // Distance between grid points
+		const MAX_CELLS = GRID_SIZE * GRID_SIZE * GRID_SIZE;
+		const GENERATION_TIME = 30; // frames per generation (0.5 seconds at 60fps)
+		const DECISION_TIME = 10; // frames per decision cycle (0.17 seconds at 60fps)
+		
+		// Torus parameters for Conway cells
+		const TORUS_RADIUS = 200; // Major radius
+		const TORUS_TUBE_RADIUS = 100; // Minor radius
+		const TORUS_MARGIN = 20; // Margin for torus boundary
+		
 		const colors = [0x64c8ff, 0xffc864, 0x64ff96];
 
-	for(let i=0;i<N_BODIES;i++){
-		masses.push(1 + Math.random());
+		// --- Conway's Game of Life + Free Will + Movement system ---
+		const cellStates = []; // true = alive, false = dead
+		const cellAges = []; // How long each cell has been alive
+		const cellPersonalities = []; // Personality traits for each cell
+		const cellEnergy = []; // Energy level for each cell
+		const cellIntentions = []; // What each cell wants to do
+		const cellDecisionTimers = []; // When cells make decisions
+		const positions = []; // Current 3D positions
+		const velocities = []; // Current velocities
+		const masses = []; // Cell masses
+		const spheres = [];
+		const trails = [];
 		
-		// Place bodies in a small circle that's guaranteed to be inside the torus
-		// Use a radius that's much smaller than the torus tube radius
-		const safeRadius = 30; // Much smaller than TORUS_TUBE_RADIUS (100)
-		const angle = Math.random() * Math.PI * 2;
-		const distance = Math.random() * safeRadius;
-		
-		// Place them in a small circular area near the torus center
-		const x = distance * Math.cos(angle);
-		const y = (Math.random() - 0.5) * 60; // Small vertical spread
-		const z = distance * Math.sin(angle);
-		
-		// Offset to be near the torus (but inside the hole)
-		const torusOffset = TORUS_RADIUS - 50; // Inside the torus hole
-		const position = new THREE.Vector3(
-			x + torusOffset,
-			y,
-			z
-		);
-		
-		positions.push(position);
-		
-		// Give them very small initial velocity to keep them contained
-		velocities.push(new THREE.Vector3(
-			(Math.random()-0.5)*15,
-			(Math.random()-0.5)*15,
-			(Math.random()-0.5)*15
-		));
+		// Movement parameters
+		const MOVEMENT_SPEED = 0.5; // Base movement speed
+		const FRICTION = 0.98; // Friction coefficient
+		const REPULSION_FORCE = 0.1; // Force between cells
 
-		const geo = new THREE.SphereGeometry(6 + masses[i]*2, 32, 32);
-		const mat = new THREE.MeshStandardMaterial({
-			color: colors[i],
-			emissive: new THREE.Color(colors[i]).multiplyScalar(0.1),
-			metalness: 0.3,
-			roughness: 0.4
-		});
-		const sphere = new THREE.Mesh(geo, mat);
-		scene.add(sphere);
-		spheres.push(sphere);
-		
-		// Add white outline
-		const outlineGeo = new THREE.SphereGeometry(6 + masses[i]*2 + 0.5, 32, 32);
-		const outlineMat = new THREE.MeshBasicMaterial({
-			color: 0xffffff,
-			transparent: true,
-			opacity: 0.3,
-			wireframe: true
-		});
-		const outline = new THREE.Mesh(outlineGeo, outlineMat);
-		sphere.add(outline);
-
-			trails.push([]);
-		}
-
-		// --- Helper functions ---
-		function computeAccelerations() {
-			const acc = positions.map(_=>new THREE.Vector3());
-			for(let i=0;i<N_BODIES;i++){
-				for(let j=i+1;j<N_BODIES;j++){
-					const r = positions[j].clone().sub(positions[i]);
-					const dist2 = r.lengthSq() + 1e-5;
-					const dist = Math.sqrt(dist2);
-					const strength = G / dist2;
-					const force = r.clone().multiplyScalar(strength * masses[i] * masses[j]);
-					acc[i].add(force.clone().divideScalar(masses[i]));
-					acc[j].sub(force.clone().divideScalar(masses[j]));
+		function initializeConwayGrid() {
+			// Clear existing arrays
+			cellStates.length = 0;
+			cellAges.length = 0;
+			cellPersonalities.length = 0;
+			cellEnergy.length = 0;
+			cellIntentions.length = 0;
+			cellDecisionTimers.length = 0;
+			positions.length = 0;
+			velocities.length = 0;
+			masses.length = 0;
+			
+			// Initialize grid with random pattern and personalities
+			for(let x = 0; x < GRID_SIZE; x++) {
+				for(let y = 0; y < GRID_SIZE; y++) {
+					for(let z = 0; z < GRID_SIZE; z++) {
+						const index = x * GRID_SIZE * GRID_SIZE + y * GRID_SIZE + z;
+						
+						// Random initial state (about 25% alive)
+						const isAlive = Math.random() < 0.25;
+						cellStates[index] = isAlive;
+						cellAges[index] = isAlive ? Math.floor(Math.random() * 10) : 0;
+						
+						// Initialize personality traits for all cells (alive or dead)
+						cellPersonalities[index] = {
+							curiosity: Math.random(), // How much they explore
+							social: Math.random(),    // How much they seek others
+							aggression: Math.random(), // How much they avoid/confront
+							survivalInstinct: Math.random(), // How hard they fight to survive
+							reproductionDrive: Math.random() // How much they want to reproduce
+						};
+						
+						cellEnergy[index] = isAlive ? 50 + Math.random() * 50 : 0;
+						cellIntentions[index] = new THREE.Vector3(0, 0, 0);
+						cellDecisionTimers[index] = Math.random() * 100;
+						
+						if (isAlive) {
+							// Convert grid coordinates to torus world coordinates
+							const worldPos = getGridToTorusWorld(x, y, z);
+							positions.push(worldPos);
+							
+							// Initialize velocity and mass for movement
+							velocities.push(new THREE.Vector3(
+								(Math.random() - 0.5) * 2,
+								(Math.random() - 0.5) * 2,
+								(Math.random() - 0.5) * 2
+							));
+							masses.push(1.0 + Math.random() * 0.5);
+						}
+					}
 				}
 			}
-			// Fluid damping & vortex
-			const center = new THREE.Vector3();
-			positions.forEach(p=>center.add(p.clone()));
-			center.divideScalar(N_BODIES);
-
-			for(let i=0;i<N_BODIES;i++){
-				acc[i].sub(velocities[i].clone().multiplyScalar(DRAG_COEFF));
-				const r = positions[i].clone().sub(center);
-				const perp = new THREE.Vector3(-r.y, r.x, 0);
-				acc[i].add(perp.multiplyScalar(VORTEX_STRENGTH / (r.length() + 1e-5)));
-			}
-			return acc;
+		}
+		
+		function getGridToTorusWorld(x, y, z) {
+			// Convert grid coordinates to torus world coordinates
+			// Map grid to torus surface
+			const theta = (x / GRID_SIZE) * 2 * Math.PI; // Angle around torus
+			const phi = (y / GRID_SIZE) * 2 * Math.PI;   // Angle around tube
+			const tubeRadius = TORUS_TUBE_RADIUS * 0.6; // Use most of the tube radius
+			const r = TORUS_RADIUS + Math.cos(phi) * tubeRadius; // Distance from center
+			const worldY = Math.sin(phi) * tubeRadius; // Height
+			
+			const worldX = Math.cos(theta) * r;
+			const worldZ = Math.sin(theta) * r;
+			
+			return new THREE.Vector3(worldX, worldY, worldZ);
+		}
+		
+		function isInsideTorus(x, y, z) {
+			// Check if point is inside torus boundary
+			const distanceFromCenter = Math.sqrt(x*x + z*z);
+			const distanceFromTorusAxis = Math.abs(distanceFromCenter - TORUS_RADIUS);
+			const distanceFromTorusCenter = Math.sqrt(distanceFromTorusAxis * distanceFromTorusAxis + y*y);
+			return distanceFromTorusCenter < TORUS_TUBE_RADIUS;
 		}
 
-	function handleBounce() {
-		for(let i=0;i<N_BODIES;i++){
-			const pos = positions[i];
+		// --- Free Will Decision Making for Cells ---
+		function makeCellDecision(gridIndex) {
+			const personality = cellPersonalities[gridIndex];
+			const energy = cellEnergy[gridIndex];
+			const isAlive = cellStates[gridIndex];
+			
+			if (!isAlive) return; // Dead cells don't make decisions
+			
+			// Calculate intention based on personality and situation
+			let intention = new THREE.Vector3(0, 0, 0);
+			
+			// Social behavior - move toward or away from neighbors
+			const neighbors = countNeighborsFromIndex(gridIndex);
+			if (personality.social > 0.5) {
+				// Seek neighbors
+				intention = seekNeighbors(gridIndex);
+			} else if (personality.aggression > 0.5) {
+				// Avoid neighbors
+				intention = avoidNeighbors(gridIndex);
+			}
+			
+			// Exploration behavior
+			if (personality.curiosity > 0.7) {
+				const exploreForce = new THREE.Vector3(
+					(Math.random() - 0.5) * 2,
+					(Math.random() - 0.5) * 2,
+					(Math.random() - 0.5) * 2
+				);
+				intention.add(exploreForce);
+			}
+			
+			// Store intention
+			cellIntentions[gridIndex].copy(intention);
+			
+			// Consume energy
+			cellEnergy[gridIndex] = Math.max(0, cellEnergy[gridIndex] - 0.5);
+		}
+		
+		function seekNeighbors(gridIndex) {
+			const {x, y, z} = getGridCoords(gridIndex);
+			let socialForce = new THREE.Vector3(0, 0, 0);
+			
+			// Look for nearby alive cells
+			for(let dx = -2; dx <= 2; dx++) {
+				for(let dy = -2; dy <= 2; dy++) {
+					for(let dz = -2; dz <= 2; dz++) {
+						if (dx === 0 && dy === 0 && dz === 0) continue;
+						
+						const nx = x + dx;
+						const ny = y + dy;
+						const nz = z + dz;
+						const neighborIndex = getGridIndex(nx, ny, nz);
+						
+						if (neighborIndex >= 0 && cellStates[neighborIndex]) {
+							const direction = new THREE.Vector3(dx, dy, dz).normalize();
+							const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+							socialForce.add(direction.multiplyScalar(1 / distance));
+						}
+					}
+				}
+			}
+			
+			return socialForce.normalize();
+		}
+		
+		function avoidNeighbors(gridIndex) {
+			const {x, y, z} = getGridCoords(gridIndex);
+			let avoidForce = new THREE.Vector3(0, 0, 0);
+			
+			// Avoid nearby alive cells
+			for(let dx = -1; dx <= 1; dx++) {
+				for(let dy = -1; dy <= 1; dy++) {
+					for(let dz = -1; dz <= 1; dz++) {
+						if (dx === 0 && dy === 0 && dz === 0) continue;
+						
+						const nx = x + dx;
+						const ny = y + dy;
+						const nz = z + dz;
+						const neighborIndex = getGridIndex(nx, ny, nz);
+						
+						if (neighborIndex >= 0 && cellStates[neighborIndex]) {
+							const direction = new THREE.Vector3(-dx, -dy, -dz).normalize();
+							avoidForce.add(direction);
+						}
+					}
+				}
+			}
+			
+			return avoidForce.normalize();
+		}
+		
+		function getGridCoords(gridIndex) {
+			const x = Math.floor(gridIndex / (GRID_SIZE * GRID_SIZE));
+			const y = Math.floor((gridIndex % (GRID_SIZE * GRID_SIZE)) / GRID_SIZE);
+			const z = gridIndex % GRID_SIZE;
+			return {x, y, z};
+		}
+		
+		function countNeighborsFromIndex(gridIndex) {
+			const {x, y, z} = getGridCoords(gridIndex);
+			return countNeighbors(x, y, z);
+		}
+		
+		// --- Movement Physics Functions ---
+		function updateMovement() {
+			// Apply forces and update positions
+			for(let i = 0; i < positions.length; i++) {
+				if (!cellStates[i]) continue; // Skip dead cells
+				
+				const pos = positions[i];
+				const vel = velocities[i];
+				const mass = masses[i];
+				const personality = cellPersonalities[i];
+				const intention = cellIntentions[i];
+				
+				// Apply intention-based force
+				const intentionForce = intention.clone().multiplyScalar(MOVEMENT_SPEED * mass);
+				vel.add(intentionForce);
+				
+				// Apply repulsion forces between cells
+				for(let j = 0; j < positions.length; j++) {
+					if (i === j || !cellStates[j]) continue;
+					
+					const otherPos = positions[j];
+					const distance = pos.distanceTo(otherPos);
+					
+					if (distance < 20 && distance > 0) { // Repulsion within 20 units
+						const repulsionDir = pos.clone().sub(otherPos).normalize();
+						const repulsionStrength = REPULSION_FORCE / (distance * distance);
+						vel.add(repulsionDir.multiplyScalar(repulsionStrength));
+					}
+				}
+				
+				// Apply friction
+				vel.multiplyScalar(FRICTION);
+				
+				// Update position
+				pos.add(vel.clone().multiplyScalar(0.1));
+				
+				// Keep cells on torus surface
+				constrainToTorusSurface(pos);
+			}
+		}
+		
+		function constrainToTorusSurface(pos) {
+			// Project position onto torus surface
 			const x = pos.x;
 			const y = pos.y;
 			const z = pos.z;
 			
 			// Calculate distance from torus center axis
 			const distanceFromCenter = Math.sqrt(x*x + z*z);
+			const theta = Math.atan2(z, x);
 			
-			// Check if point is inside torus bounds
-			const distanceFromTorusAxis = Math.abs(distanceFromCenter - TORUS_RADIUS);
-			const distanceFromTorusCenter = Math.sqrt(distanceFromTorusAxis * distanceFromTorusAxis + y*y);
+			// Find closest point on torus surface
+			const targetRadius = TORUS_RADIUS;
+			const targetX = Math.cos(theta) * targetRadius;
+			const targetZ = Math.sin(theta) * targetRadius;
 			
-			// Add some margin to prevent bodies from getting too close to the edge
-			const margin = 20;
-			const effectiveTubeRadius = TORUS_TUBE_RADIUS - margin;
+			// Project onto torus surface
+			const direction = new THREE.Vector3(x - targetX, y, z - targetZ).normalize();
+			const surfacePos = new THREE.Vector3(
+				targetX + direction.x * TORUS_TUBE_RADIUS * 0.6,
+				direction.y * TORUS_TUBE_RADIUS * 0.6,
+				targetZ + direction.z * TORUS_TUBE_RADIUS * 0.6
+			);
 			
-			if (distanceFromTorusCenter > effectiveTubeRadius) {
-				// Point is outside torus, force it back inside
-				const theta = Math.atan2(z, x);
-				const torusCenterX = Math.cos(theta) * TORUS_RADIUS;
-				const torusCenterZ = Math.sin(theta) * TORUS_RADIUS;
-				const torusCenterY = 0;
-				
-				// Vector from torus center to particle
-				const toParticle = new THREE.Vector3(x - torusCenterX, y - torusCenterY, z - torusCenterZ);
-				toParticle.normalize();
-				
-				// Move particle to safe position inside torus
-				const surfacePos = new THREE.Vector3(
-					torusCenterX + toParticle.x * effectiveTubeRadius,
-					torusCenterY + toParticle.y * effectiveTubeRadius,
-					torusCenterZ + toParticle.z * effectiveTubeRadius
-				);
-				
-				positions[i].copy(surfacePos);
-				
-				// Reflect velocity with some damping to prevent oscillation
-				const velocityDotNormal = velocities[i].dot(toParticle);
-				if (velocityDotNormal > 0) { // Only reflect if moving outward
-					velocities[i].sub(toParticle.clone().multiplyScalar(2 * velocityDotNormal));
-					// Add some damping to prevent infinite bouncing
-					velocities[i].multiplyScalar(0.95);
+			pos.copy(surfacePos);
+		}
+
+		// --- Conway's Game of Life Rules ---
+		function getGridIndex(x, y, z) {
+			if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE || z < 0 || z >= GRID_SIZE) {
+				return -1; // Out of bounds
+			}
+			return x * GRID_SIZE * GRID_SIZE + y * GRID_SIZE + z;
+		}
+
+		function countNeighbors(x, y, z) {
+			let count = 0;
+			for(let dx = -1; dx <= 1; dx++) {
+				for(let dy = -1; dy <= 1; dy++) {
+					for(let dz = -1; dz <= 1; dz++) {
+						if (dx === 0 && dy === 0 && dz === 0) continue;
+						
+						const nx = x + dx;
+						const ny = y + dy;
+						const nz = z + dz;
+						const neighborIndex = getGridIndex(nx, ny, nz);
+						
+						if (neighborIndex >= 0 && cellStates[neighborIndex]) {
+							count++;
+						}
+					}
+				}
+			}
+			return count;
+		}
+		
+		function updateConwayGeneration() {
+			const newCellStates = [...cellStates];
+			const newCellAges = [...cellAges];
+			const newCellEnergy = [...cellEnergy];
+			
+			// Apply Conway's rules with personality modifications to each cell
+			for(let x = 0; x < GRID_SIZE; x++) {
+				for(let y = 0; y < GRID_SIZE; y++) {
+					for(let z = 0; z < GRID_SIZE; z++) {
+						const index = getGridIndex(x, y, z);
+						const neighbors = countNeighbors(x, y, z);
+						const isAlive = cellStates[index];
+						const personality = cellPersonalities[index];
+						const energy = cellEnergy[index];
+						
+						if (isAlive) {
+							// Modified survival rules based on personality
+							let shouldSurvive = false;
+							
+							// Base Conway rules
+							if (neighbors === 2 || neighbors === 3) {
+								shouldSurvive = true;
+							}
+							
+							// Personality modifications
+							if (personality.survivalInstinct > 0.7 && energy > 30) {
+								// Strong survival instinct can overcome underpopulation
+								if (neighbors === 1) shouldSurvive = true;
+							}
+							
+							if (personality.social > 0.8 && neighbors >= 4) {
+								// Social cells can survive overpopulation
+								if (neighbors <= 5) shouldSurvive = true;
+							}
+							
+							// Energy-based survival
+							if (energy < 10) {
+								shouldSurvive = false; // Die from low energy
+							}
+							
+							if (shouldSurvive) {
+								newCellStates[index] = true;
+								newCellAges[index] = cellAges[index] + 1;
+								newCellEnergy[index] = Math.min(100, energy + 5); // Gain energy from survival
+							} else {
+								newCellStates[index] = false;
+								newCellAges[index] = 0;
+								newCellEnergy[index] = 0;
+							}
+						} else {
+							// Modified birth rules
+							let shouldBirth = false;
+							
+							// Base Conway rule: exactly 3 neighbors
+							if (neighbors === 3) {
+								shouldBirth = true;
+							}
+							
+							// Personality-based birth modifications
+							if (personality.reproductionDrive > 0.8) {
+								// High reproduction drive can birth with 2 neighbors
+								if (neighbors === 2) shouldBirth = true;
+							}
+							
+							// Social cells can birth with 4 neighbors if they're social
+							if (personality.social > 0.9 && neighbors === 4) {
+								shouldBirth = true;
+							}
+							
+							if (shouldBirth) {
+								newCellStates[index] = true;
+								newCellAges[index] = 1;
+								newCellEnergy[index] = 50 + Math.random() * 30; // New cells start with energy
+								
+								// Add new cell to movement system
+								const worldPos = getGridToTorusWorld(x, y, z);
+								positions.push(worldPos);
+								velocities.push(new THREE.Vector3(
+									(Math.random() - 0.5) * 2,
+									(Math.random() - 0.5) * 2,
+									(Math.random() - 0.5) * 2
+								));
+								masses.push(1.0 + Math.random() * 0.5);
+							} else {
+								newCellStates[index] = false;
+								newCellAges[index] = 0;
+								newCellEnergy[index] = 0;
+							}
+						}
+					}
+				}
+			}
+			
+			// Update cell states
+			cellStates.length = 0;
+			cellStates.push(...newCellStates);
+			cellAges.length = 0;
+			cellAges.push(...newCellAges);
+			cellEnergy.length = 0;
+			cellEnergy.push(...newCellEnergy);
+			
+			// Update visual representation
+			updateVisualCells();
+		}
+		
+		function updateVisualCells() {
+			// Remove all existing spheres
+			spheres.forEach(sphere => scene.remove(sphere));
+			spheres.length = 0;
+			trails.length = 0;
+			
+			// Create spheres for alive cells using current positions
+			let cellIndex = 0;
+			for(let x = 0; x < GRID_SIZE; x++) {
+				for(let y = 0; y < GRID_SIZE; y++) {
+					for(let z = 0; z < GRID_SIZE; z++) {
+						const index = getGridIndex(x, y, z);
+						if (cellStates[index]) {
+							const worldPos = positions[cellIndex]; // Use current position
+							const personality = cellPersonalities[index];
+							const energy = cellEnergy[index];
+							const age = cellAges[index];
+							
+							// Create sphere with size-based appearance
+							const size = 4 + (energy / 100) * 8; // Size based on energy (4-12)
+							const geo = new THREE.SphereGeometry(size, 16, 16);
+							
+							// Color based on personality traits and size
+							let baseColor;
+							if (personality.social > 0.7) {
+								baseColor = colors[0]; // Blue for social
+							} else if (personality.aggression > 0.7) {
+								baseColor = colors[1]; // Orange for aggressive
+							} else if (personality.curiosity > 0.7) {
+								baseColor = colors[2]; // Green for curious
+							} else {
+								baseColor = colors[age % colors.length]; // Default by age
+							}
+							
+							const mat = new THREE.MeshStandardMaterial({
+								color: baseColor,
+								emissive: new THREE.Color(baseColor).multiplyScalar(0.2 + energy * 0.005),
+								metalness: 0.3,
+								roughness: 0.4
+							});
+							const sphere = new THREE.Mesh(geo, mat);
+							sphere.position.copy(worldPos);
+							scene.add(sphere);
+							spheres.push(sphere);
+							
+							// Add intention arrow for cells with strong intentions
+							const intention = cellIntentions[index];
+							if (intention.length() > 0.5) {
+								const arrowGeometry = new THREE.ConeGeometry(1, 6, 8);
+								const arrowMaterial = new THREE.MeshBasicMaterial({
+									color: baseColor,
+									transparent: true,
+									opacity: 0.6
+								});
+								const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+								
+								// Position arrow in direction of intention
+								const arrowPos = worldPos.clone().add(intention.clone().normalize().multiplyScalar(12));
+								arrow.position.copy(arrowPos);
+								
+								// Orient arrow toward intention direction
+								arrow.lookAt(worldPos.clone().add(intention.clone().multiplyScalar(2)));
+								arrow.rotateX(Math.PI / 2);
+								
+								scene.add(arrow);
+								sphere.intentionArrow = arrow;
+							}
+							
+							// Add white outline
+							const outlineGeo = new THREE.SphereGeometry(size + 0.5, 16, 16);
+							const outlineMat = new THREE.MeshBasicMaterial({
+								color: 0xffffff,
+								transparent: true,
+								opacity: 0.3,
+								wireframe: true
+							});
+							const outline = new THREE.Mesh(outlineGeo, outlineMat);
+							sphere.add(outline);
+							
+							trails.push([]);
+							cellIndex++;
+						}
+					}
 				}
 			}
 		}
-	}
 
-	// Torus visualization
-	const torusGeo = new THREE.TorusGeometry(TORUS_RADIUS, TORUS_TUBE_RADIUS, 16, 32);
-	const torusMat = new THREE.MeshBasicMaterial({color:0xffffff, wireframe:true, opacity:0.3, transparent:true});
-	const torusMesh = new THREE.Mesh(torusGeo, torusMat);
-	scene.add(torusMesh);
+		// --- Initialize simulation ---
+		console.log('Initializing Conway\'s Game of Life + Free Will simulation...');
+		initializeConwayGrid();
+		updateVisualCells();
+		console.log('Simulation initialized successfully!');
 
-		// Debug: Log initial positions
-		console.log('Initial positions:', positions.map(p => ({x: p.x.toFixed(1), y: p.y.toFixed(1), z: p.z.toFixed(1)})));
+		// Create torus wireframe
+		const torusGeo = new THREE.TorusGeometry(TORUS_RADIUS, TORUS_TUBE_RADIUS, 16, 32);
+		const torusMat = new THREE.MeshBasicMaterial({
+			color: 0xffffff,
+			transparent: true,
+			opacity: 0.2,
+			wireframe: true
+		});
+		const torusMesh = new THREE.Mesh(torusGeo, torusMat);
+		torusMesh.rotation.x = Math.PI / 2; // Rotate 90 degrees around X-axis
+		scene.add(torusMesh);
+
+		// Add lighting
+		const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+		scene.add(ambientLight);
 		
-		document.getElementById('info').innerHTML = `
-			<div style="font-size: 18px; margin-bottom: 10px;">
-				<strong>Torus simulation running!</strong> Bodies bounce within the donut shape.
-			</div>
-			<div style="font-size: 14px; color: #ccc;">
-				Mouse Controls: Left=drag orbit, Right=pan, Scroll=zoom<br>
-				Physics: ${N_BODIES} bodies with gravity, drag, and vortex effects<br>
-				Boundary: Torus with ${TORUS_RADIUS} radius, ${TORUS_TUBE_RADIUS} tube radius<br>
-				Debug: Check console for initial positions
-			</div>
-		`;
+		const pointLight = new THREE.PointLight(0xffffff, 1, 1000);
+		pointLight.position.set(100, 100, 100);
+		scene.add(pointLight);
+		
+		const pointLight2 = new THREE.PointLight(0x64c8ff, 0.8, 1000);
+		pointLight2.position.set(-100, -100, -100);
+		scene.add(pointLight2);
+		
+		const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+		directionalLight.position.set(1, 1, 1);
+		scene.add(directionalLight);
 
 		// --- Animation loop ---
+		let generationTimer = 0;
+		let decisionTimer = 0;
 		function animate(){
 			requestAnimationFrame(animate);
-
-			// Physics update
-			const acc = computeAccelerations();
-			for(let i=0;i<N_BODIES;i++){
-				velocities[i].add(acc[i].clone().multiplyScalar(DT));
-				positions[i].add(velocities[i].clone().multiplyScalar(DT));
-			}
-
-			handleBounce();
-
-			// Update spheres & trails
-			for(let i=0;i<N_BODIES;i++){
-				spheres[i].position.copy(positions[i]);
-
-				// Enhanced trails with opacity gradient
-				trails[i].push(positions[i].clone());
-				if(trails[i].length > 200) trails[i].shift();
-				if(spheres[i].trailLine) scene.remove(spheres[i].trailLine);
-
-				if(trails[i].length > 1) {
-					const trailGeo = new THREE.BufferGeometry().setFromPoints(trails[i]);
-					const trailMat = new THREE.LineBasicMaterial({
-						color: colors[i], 
-						linewidth: 3, 
-						transparent: true, 
-						opacity: 0.8,
-						vertexColors: true
-					});
+			
+			generationTimer++;
+			decisionTimer++;
+			
+			// Update movement every frame
+			updateMovement();
+			
+			// Update sphere positions
+			for(let i = 0; i < spheres.length; i++) {
+				if (spheres[i] && positions[i]) {
+					spheres[i].position.copy(positions[i]);
 					
-					// Add vertex colors for gradient effect
-					const colors_array = [];
-					for(let j = 0; j < trails[i].length; j++) {
-						const alpha = j / trails[i].length;
-						const color = new THREE.Color(colors[i]);
-						color.multiplyScalar(alpha * 0.8 + 0.2);
-						colors_array.push(color.r, color.g, color.b);
-					}
-					trailGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors_array, 3));
-					
-					const trailLine = new THREE.Line(trailGeo, trailMat);
-					scene.add(trailLine);
-					spheres[i].trailLine = trailLine;
+					// Update trails
+					trails[i].push(positions[i].clone());
+					if (trails[i].length > 50) trails[i].shift();
 				}
 			}
+			
+			// Free will decision making every 10 frames
+			if (decisionTimer >= DECISION_TIME) {
+				for(let i = 0; i < MAX_CELLS; i++) {
+					if (cellStates[i]) {
+						cellDecisionTimers[i]--;
+						if (cellDecisionTimers[i] <= 0) {
+							makeCellDecision(i);
+							cellDecisionTimers[i] = 20 + Math.random() * 30;
+						}
+					}
+				}
+				decisionTimer = 0;
+			}
+			
+			// Update Conway's Game of Life every 30 frames (0.5 seconds at 60fps)
+			if (generationTimer >= GENERATION_TIME) {
+				updateConwayGeneration();
+				generationTimer = 0;
+			}
 
-			if (controls) controls.update();
+			// Update controls
+			controls.update();
 			renderer.render(scene, camera);
 		}
 		animate();
 
-		// --- Resize handler ---
-		window.addEventListener('resize', ()=>{
-			camera.aspect = window.innerWidth/window.innerHeight;
+		// --- Info display ---
+		document.getElementById('info').innerHTML = `
+			<div style="font-size: 18px; margin-bottom: 10px;">
+				<strong>Conway's Game of Life + Free Will + Movement!</strong> Intelligent Moving Cellular Automaton.
+			</div>
+			<div style="font-size: 14px; color: #ccc;">
+				Mouse Controls: Left=drag orbit, Right=pan, Scroll=zoom<br>
+				Grid: ${GRID_SIZE}×${GRID_SIZE}×${GRID_SIZE} cells (${MAX_CELLS} total)<br>
+				Rules: Modified Conway + Personality-based survival/birth<br>
+				Movement: Free movement on torus surface with physics<br>
+				Personalities: Social (blue), Aggressive (orange), Curious (green)<br>
+				Visual: Size=energy, Color=personality, Arrows=intentions<br>
+				Update: Movement every frame, decisions every 0.17s, generations every 0.5s
+			</div>
+		`;
+
+		// Handle window resize
+		window.addEventListener('resize', () => {
+			camera.aspect = window.innerWidth / window.innerHeight;
 			camera.updateProjectionMatrix();
 			renderer.setSize(window.innerWidth, window.innerHeight);
 		});
-
-	} catch (error) {
-		document.getElementById('info').innerHTML = 'ERROR: ' + error.message;
-		console.error('Simulation error:', error);
-	}
-
-</script>
+	</script>
 </body>
 </html>
