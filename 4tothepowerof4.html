@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>4D Hypercube (Tesseract) - Interactive Links</title>
+    <!-- Apple Safari/WebKit optimizations -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <style>
+        body {
+            margin: 0;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 350px;
+        }
+        
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            width: 280px;
+        }
+        
+        .label {
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        
+        .slider {
+            width: 100%;
+            margin: 10px 0;
+        }
+        
+        .button {
+            background: rgba(100, 200, 255, 0.2);
+            border: 1px solid #64c8ff;
+            color: #64c8ff;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 12px;
+        }
+        
+        .button:hover {
+            background: rgba(100, 200, 255, 0.4);
+        }
+        
+        
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <div style="font-size: 18px; margin-bottom: 10px;">
+            <strong>4D Hypercube (Tesseract)</strong>
+        </div>
+        <div style="font-size: 14px; color: #ccc;">
+            Interactive 4x4x4x4 hypercube visualization<br>
+            Mouse: Left=orbit, Right=pan, Scroll=zoom<br>
+            <span id="cubeCount">256 cubes total</span>
+        </div>
+    </div>
+    
+    <div id="controls">
+        <div class="label">4D Rotation Speed: <span id="speedValue">1.0</span></div>
+        <input type="range" id="speedSlider" class="slider" min="0" max="3" step="0.1" value="1.0">
+        
+        <div class="label">W-Slice: <span id="wSliceValue">All</span></div>
+        <input type="range" id="wSliceSlider" class="slider" min="0" max="4" step="1" value="4">
+        
+        <div class="label">Projection Distance: <span id="projValue">4.5</span></div>
+        <input type="range" id="projSlider" class="slider" min="2" max="8" step="0.1" value="4.5">
+        
+        <div style="margin-top: 10px;">
+            <button class="button" onclick="resetView()">Reset View</button>
+        </div>
+    </div>
+    
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script>
+        // Apple Safari/WebKit optimizations
+        const isAppleDevice = /iPad|iPhone|iPod|Macintosh|Safari/.test(navigator.userAgent);
+        const pixelRatio = isAppleDevice ? Math.min(window.devicePixelRatio, 2) : 1;
+        
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ 
+            antialias: true,
+            powerPreference: isAppleDevice ? "high-performance" : "default",
+            alpha: false
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(pixelRatio);
+        renderer.setClearColor(0x0f0f23);
+        
+        // Apple Metal optimizations
+        if (isAppleDevice) {
+            renderer.capabilities.logarithmicDepthBuffer = true;
+            renderer.shadowMap.enabled = false;
+        }
+        
+        document.body.appendChild(renderer.domElement);
+        
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        camera.position.set(8, 8, 8);
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        scene.add(ambientLight);
+        const pointLight = new THREE.PointLight(0x64c8ff, 1, 100);
+        pointLight.position.set(10, 10, 10);
+        scene.add(pointLight);
+        
+        // 4D Hypercube parameters
+        const GRID_SIZE = 4;
+        const SPACING = 1.0;
+        let rotationSpeed = 1.0;
+        let projectionDistance = 4.5;
+        let wSlice = 4; // 4 means show all
+        
+        // Generate 4D vertices
+        const vertices4D = [];
+        const cubeData = []; // Store data for each cube
+        
+        for (let w = 0; w < GRID_SIZE; w++) {
+            for (let x = 0; x < GRID_SIZE; x++) {
+                for (let y = 0; y < GRID_SIZE; y++) {
+                    for (let z = 0; z < GRID_SIZE; z++) {
+                        const index = vertices4D.length;
+                        vertices4D.push(new THREE.Vector4(w, x, y, z));
+                        
+                        cubeData.push({
+                            coords: [w, x, y, z],
+                            mesh: null
+                        });
+                    }
+                }
+            }
+        }
+        
+        // Generate edges (connect vertices differing by exactly 1 coordinate)
+        const edges = [];
+        for (let i = 0; i < vertices4D.length; i++) {
+            for (let j = i + 1; j < vertices4D.length; j++) {
+                const v1 = vertices4D[i];
+                const v2 = vertices4D[j];
+                let diff = 0;
+                if (v1.x !== v2.x) diff++;
+                if (v1.y !== v2.y) diff++;
+                if (v1.z !== v2.z) diff++;
+                if (v1.w !== v2.w) diff++;
+                
+                if (diff === 1) {
+                    edges.push([i, j]);
+                }
+            }
+        }
+        
+        // 4D rotation around W-X plane
+        function rotate4D(v, angle) {
+            const cos_a = Math.cos(angle);
+            const sin_a = Math.sin(angle);
+            const w1 = v.w * cos_a - v.x * sin_a;
+            const x1 = v.w * sin_a + v.x * cos_a;
+            return new THREE.Vector4(w1, x1, v.y, v.z);
+        }
+        
+        // 4D to 3D projection (perspective along W)
+        function project4DTo3D(v) {
+            const center = (GRID_SIZE - 1) / 2;
+            const factor = 1 / (projectionDistance - v.w);
+            return new THREE.Vector3(
+                (v.x - center) * factor * SPACING,
+                (v.y - center) * factor * SPACING,
+                (v.z - center) * factor * SPACING
+            );
+        }
+        
+        // Create wireframe
+        const wireframeGroup = new THREE.Group();
+        const lineMaterial = new THREE.LineBasicMaterial({ 
+            color: 0x64c8ff, 
+            transparent: true, 
+            opacity: 0.6 
+        });
+        
+        const wireframeLines = [];
+        edges.forEach(([i, j]) => {
+            const geometry = new THREE.BufferGeometry();
+            const line = new THREE.Line(geometry, lineMaterial);
+            wireframeGroup.add(line);
+            wireframeLines.push({ line, i, j });
+        });
+        
+        scene.add(wireframeGroup);
+        
+        // Create cubes
+        const cubesGroup = new THREE.Group();
+        const cubeGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+        const cubeMaterials = [
+            new THREE.MeshStandardMaterial({ color: 0xff6b6b, transparent: true, opacity: 0.8 }),
+            new THREE.MeshStandardMaterial({ color: 0x4ecdc4, transparent: true, opacity: 0.8 }),
+            new THREE.MeshStandardMaterial({ color: 0x45b7d1, transparent: true, opacity: 0.8 }),
+            new THREE.MeshStandardMaterial({ color: 0xfeca57, transparent: true, opacity: 0.8 })
+        ];
+        
+        cubeData.forEach((data, index) => {
+            const material = cubeMaterials[data.coords[0] % cubeMaterials.length].clone();
+            const cube = new THREE.Mesh(cubeGeometry, material);
+            cube.userData = { index, data };
+            cubesGroup.add(cube);
+            data.mesh = cube;
+        });
+        
+        scene.add(cubesGroup);
+        
+        // Animation
+        let time = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            time += 0.01 * rotationSpeed;
+            
+            // Rotate 4D vertices
+            const rotatedVertices = vertices4D.map(v => rotate4D(v, time));
+            const projectedVertices = rotatedVertices.map(v => project4DTo3D(v));
+            
+            // Update wireframe
+            wireframeLines.forEach(({ line, i, j }) => {
+                const v1 = rotatedVertices[i];
+                const v2 = rotatedVertices[j];
+                
+                // Apply W-slice filter
+                if (wSlice < 4) {
+                    if (Math.floor(v1.w) !== wSlice && Math.floor(v2.w) !== wSlice) {
+                        line.visible = false;
+                        return;
+                    }
+                }
+                line.visible = true;
+                
+                const p1 = projectedVertices[i];
+                const p2 = projectedVertices[j];
+                
+                const positions = new Float32Array([
+                    p1.x, p1.y, p1.z,
+                    p2.x, p2.y, p2.z
+                ]);
+                
+                line.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            });
+            
+            // Update cubes
+            cubeData.forEach((data, index) => {
+                const v = rotatedVertices[index];
+                const p = projectedVertices[index];
+                
+                // Apply W-slice filter
+                if (wSlice < 4 && Math.floor(v.w) !== wSlice) {
+                    data.mesh.visible = false;
+                    return;
+                }
+                data.mesh.visible = true;
+                
+                data.mesh.position.copy(p);
+                
+                // Scale based on W coordinate (depth effect)
+                const scale = 0.5 + 0.5 * (1 / (projectionDistance - v.w));
+                data.mesh.scale.setScalar(scale);
+            });
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        // UI Controls
+        document.getElementById('speedSlider').addEventListener('input', (e) => {
+            rotationSpeed = parseFloat(e.target.value);
+            document.getElementById('speedValue').textContent = rotationSpeed.toFixed(1);
+        });
+        
+        document.getElementById('wSliceSlider').addEventListener('input', (e) => {
+            wSlice = parseInt(e.target.value);
+            document.getElementById('wSliceValue').textContent = wSlice === 4 ? 'All' : wSlice;
+        });
+        
+        document.getElementById('projSlider').addEventListener('input', (e) => {
+            projectionDistance = parseFloat(e.target.value);
+            document.getElementById('projValue').textContent = projectionDistance.toFixed(1);
+        });
+        
+        function resetView() {
+            camera.position.set(8, 8, 8);
+            controls.reset();
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Start animation
+        animate();
+    </script>
+</body>
+</html>
