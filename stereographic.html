@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Stereographic + Möbius Trees</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+	<style>
+		* { box-sizing: border-box; margin: 0; padding: 0; }
+		body {
+			min-height: 100vh;
+			background: #0a0a0e;
+			font-family: 'JetBrains Mono', monospace;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			color: #e0e0e8;
+		}
+		h1 {
+			font-size: 0.85rem;
+			letter-spacing: 0.15em;
+			text-transform: uppercase;
+			margin-bottom: 1rem;
+			opacity: 0.8;
+		}
+		.container {
+			display: flex;
+			gap: 2rem;
+			align-items: center;
+			justify-content: center;
+		}
+		.box-wrap {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 0.5rem;
+		}
+		.box-wrap span {
+			font-size: 0.65rem;
+			opacity: 0.6;
+			letter-spacing: 0.1em;
+		}
+		.controls {
+			margin-top: 1rem;
+			display: flex;
+			gap: 0.75rem;
+			align-items: center;
+		}
+		button, label { font-family: inherit; font-size: 0.7rem; }
+		button {
+			padding: 0.5rem 1rem;
+			background: rgba(255,255,255,0.06);
+			border: 1px solid rgba(255,255,255,0.12);
+			border-radius: 4px;
+			color: #e0e0e8;
+			cursor: pointer;
+		}
+		button:hover { background: rgba(255,255,255,0.1); }
+		label { display: flex; align-items: center; gap: 0.5rem; opacity: 0.8; }
+		input[type="checkbox"], input[type="range"] { accent-color: #6b7fd7; cursor: pointer; }
+		canvas {
+			display: block;
+			border: 1px solid rgba(255,255,255,0.08);
+			border-radius: 4px;
+			background: #0f0f14;
+		}
+	</style>
+</head>
+<body>
+	<h1>Stereographic + Möbius</h1>
+	<div class="container">
+		<div class="box-wrap">
+			<canvas id="left" width="400" height="400"></canvas>
+			<span>CW</span>
+		</div>
+		<div class="box-wrap">
+			<canvas id="right" width="400" height="400"></canvas>
+			<span>CCW</span>
+		</div>
+	</div>
+	<div class="controls">
+		<button id="newTrees">New Trees</button>
+		<label><input type="checkbox" id="sound" checked> Sound</label>
+		<label><span id="treeCountVal">1</span> tree(s) <input type="range" id="treeCount" min="1" max="15" value="1"></label>
+	</div>
+
+	<script>
+		const W = 400, H = 400;
+		const cx = W / 2, cy = H / 2;
+		const cubeSize = 55;
+		const speed = 0.006;
+		const treeSpinSpeed = 0.003;
+
+		// Cube
+		const verts = [
+			[-cubeSize,-cubeSize,-cubeSize],[cubeSize,-cubeSize,-cubeSize],[cubeSize,cubeSize,-cubeSize],[-cubeSize,cubeSize,-cubeSize],
+			[-cubeSize,-cubeSize,cubeSize],[cubeSize,-cubeSize,cubeSize],[cubeSize,cubeSize,cubeSize],[-cubeSize,cubeSize,cubeSize]
+		];
+		const edges = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+
+		function project(x, y, z, rotY) {
+			const cos = Math.cos(rotY), sin = Math.sin(rotY);
+			const xr = x * cos - z * sin, zr = x * sin + z * cos;
+			const persp = 500 / (500 + zr);
+			return { x: cx + xr * persp, y: cy - y * persp };
+		}
+
+		function drawCube(ctx, rotY) {
+			ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+			ctx.lineWidth = 1.5;
+			const pts = verts.map(([x,y,z]) => project(x,y,z,rotY));
+			for (const [a, b] of edges) {
+				ctx.beginPath();
+				ctx.moveTo(pts[a].x, pts[a].y);
+				ctx.lineTo(pts[b].x, pts[b].y);
+				ctx.stroke();
+			}
+		}
+
+		// Tree
+		function treeSegments(x, y, angle, length, depth, segments, tips, params) {
+			if (depth <= 0 || length < 2) return;
+			const dx = length * Math.cos(angle), dy = length * Math.sin(angle);
+			const x2 = x + dx, y2 = y + dy;
+			segments.push({ x1: x, y1: y, x2, y2 });
+			if (depth === 1) {
+				const palette = [[255,80,80],[255,140,60],[255,200,80],[200,255,100],[100,220,180],[255,120,150]];
+				tips.push({ x: x2, y: y2, segIndex: segments.length - 1, color: palette[Math.floor(Math.random() * palette.length)], r: 4 + Math.random() * 3 });
+			}
+			const branchLen = length * params.lengthRatio;
+			treeSegments(x2, y2, angle - params.angleLeft, branchLen, depth - 1, segments, tips, params);
+			treeSegments(x2, y2, angle + params.angleRight, branchLen, depth - 1, segments, tips, params);
+		}
+
+		function generateTrees(count) {
+			const trees = [];
+			for (let i = 0; i < count; i++) {
+				const single = count === 1;
+				const params = {
+					depth: 7 + Math.floor(Math.random() * 8),
+					angleLeft: 0.25 + Math.random() * 0.5,
+					angleRight: 0.25 + Math.random() * 0.5,
+					lengthRatio: 0.55 + Math.random() * 0.35,
+					trunkAngle: single ? Math.PI / 2 : -Math.PI / 2 + (Math.random() - 0.5) * 0.4,
+					trunkLen: 0.2 + Math.random() * 0.2,
+					x: single ? 0.5 : 0.15 + Math.random() * 0.7,
+					y: single ? 0.5 : 0.75 + Math.random() * 0.2
+				};
+				const segs = [], tips = [];
+				treeSegments(params.x * W, params.y * H, params.trunkAngle, params.trunkLen * Math.min(W, H), params.depth, segs, tips, params);
+				trees.push({ segments: segs, tips });
+			}
+			return trees;
+		}
+
+		let trees = generateTrees(1);
+		const framesForward = 90, framesReverse = 90, totalCycle = framesForward + framesReverse;
+		let frameIndex = 0;
+		let audioCtx = null, oscCW = null, oscCCW = null;
+
+		function randomColor(minVal = 0, maxVal = 255) {
+			return {
+				r: minVal + Math.floor(Math.random() * (maxVal - minVal)),
+				g: minVal + Math.floor(Math.random() * (maxVal - minVal)),
+				b: minVal + Math.floor(Math.random() * (maxVal - minVal))
+			};
+		}
+
+		function drawTree(ctx, treeSpin = 0, mirror = false) {
+			const i = frameIndex % totalCycle;
+			const isReverse = i >= framesForward;
+			const revIdx = i - framesForward;
+			const progress = !isReverse ? (i + 1) / framesForward : 1 - (revIdx + 1) / framesReverse;
+
+			const bg = randomColor(10, 60);
+			ctx.fillStyle = `rgb(${bg.r},${bg.g},${bg.b})`;
+			ctx.fillRect(0, 0, W, H);
+
+			ctx.save();
+			if (mirror) {
+				ctx.translate(W, 0);
+				ctx.scale(-1, 1);
+			}
+			if (treeSpin !== 0) {
+				ctx.translate(cx, cy);
+				ctx.rotate(treeSpin);
+				ctx.translate(-cx, -cy);
+			}
+			if (isReverse) {
+				ctx.translate(W / 2, H / 2);
+				ctx.scale(1, -1);
+				ctx.translate(-W / 2, -H / 2);
+			}
+
+			for (const tree of trees) {
+				const treeColor = randomColor(120, 255);
+				const n = Math.max(0, Math.floor(progress * tree.segments.length));
+				ctx.strokeStyle = `rgb(${treeColor.r},${treeColor.g},${treeColor.b})`;
+				ctx.lineWidth = 2;
+				ctx.lineCap = 'round';
+				ctx.beginPath();
+				for (let j = 0; j < n; j++) {
+					const s = tree.segments[j];
+					ctx.moveTo(s.x1, s.y1);
+					ctx.lineTo(s.x2, s.y2);
+				}
+				ctx.stroke();
+				for (const tip of tree.tips) {
+					if (tip.segIndex < n) {
+						ctx.fillStyle = `rgb(${tip.color[0]},${tip.color[1]},${tip.color[2]})`;
+						ctx.beginPath();
+						ctx.arc(tip.x, tip.y, tip.r, 0, Math.PI * 2);
+						ctx.fill();
+					}
+				}
+			}
+			ctx.restore();
+			return progress;
+		}
+
+		function loop() {
+			const t = performance.now() * 0.001;
+			const leftCtx = document.getElementById('left').getContext('2d');
+			const rightCtx = document.getElementById('right').getContext('2d');
+
+			drawTree(leftCtx, 0, false);
+			drawCube(leftCtx, t * speed);
+
+			drawTree(rightCtx, -t * treeSpinSpeed, true);
+			drawCube(rightCtx, -t * speed);
+
+			const i = frameIndex % totalCycle;
+			const progress = i < framesForward ? (i + 1) / framesForward : 1 - ((i - framesForward) + 1) / framesReverse;
+
+			if (document.getElementById('sound').checked) {
+				const freqLeft = 220 + progress * 660;
+				const freqRight = 220 + (1 - progress) * 660;
+				if (audioCtx) {
+					oscCW.frequency.setTargetAtTime(freqLeft, audioCtx.currentTime, 0.02);
+					oscCCW.frequency.setTargetAtTime(freqRight, audioCtx.currentTime, 0.02);
+				} else {
+					audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+					const gainVal = 0.08;
+					oscCW = audioCtx.createOscillator();
+					const gCW = audioCtx.createGain();
+					const panCW = audioCtx.createStereoPanner();
+					gCW.gain.value = gainVal;
+					panCW.pan.value = -1;
+					oscCW.type = 'sine';
+					oscCW.connect(gCW);
+					gCW.connect(panCW);
+					panCW.connect(audioCtx.destination);
+					oscCW.frequency.value = freqLeft;
+					oscCW.start();
+					oscCCW = audioCtx.createOscillator();
+					const gCCW = audioCtx.createGain();
+					const panCCW = audioCtx.createStereoPanner();
+					gCCW.gain.value = gainVal;
+					panCCW.pan.value = 1;
+					oscCCW.type = 'sine';
+					oscCCW.connect(gCCW);
+					gCCW.connect(panCCW);
+					panCCW.connect(audioCtx.destination);
+					oscCCW.frequency.value = freqRight;
+					oscCCW.start();
+				}
+			} else if (oscCW && oscCCW) {
+				oscCW.stop();
+				oscCCW.stop();
+				oscCW = oscCCW = null;
+			}
+
+			frameIndex++;
+			requestAnimationFrame(loop);
+		}
+
+		document.getElementById('newTrees').onclick = () => {
+			trees = generateTrees(parseInt(document.getElementById('treeCount').value));
+			frameIndex = 0;
+			audioCtx?.resume();
+		};
+		document.getElementById('left').onclick = () => audioCtx?.resume();
+		document.getElementById('right').onclick = () => audioCtx?.resume();
+		document.getElementById('treeCount').oninput = (e) => {
+			document.getElementById('treeCountVal').textContent = e.target.value;
+		};
+		document.getElementById('treeCount').dispatchEvent(new Event('input'));
+
+		loop();
+	</script>
+</body>
+</html>
