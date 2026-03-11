@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>diagram.svg + diagram-2.svg → Layered Expanding Animation</title>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      background: black;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #container {
+      width: 90vmin;
+      height: 90vmin;
+      position: relative;
+    }
+    .wave {
+      position: absolute;
+      inset: 0;
+      transform-origin: center center;
+      will-change: transform, opacity;
+      pointer-events: none;
+    }
+    svg {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      inset: 0;
+    }
+    path {
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+  </style>
+</head>
+<body>
+
+<div id="container">
+  <div id="loading" style="color:#aaa; font-family:sans-serif; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:10;">
+    Loading diagram.svg + diagram-2.svg...
+  </div>
+</div>
+
+<script>
+// ────────────────────────────────────────────────
+// SETTINGS
+// ────────────────────────────────────────────────
+const FILES = ["diagram.svg", "diagram-2.svg"];
+const WAVES_PER_FILE = 12;          // total layers = WAVES_PER_FILE × FILES.length
+const CYCLE_MS       = 5200;
+const MAX_SCALE      = 8.4;
+const MIN_SCALE      = 0.04;
+const OPACITY_POWER  = 1.8;
+
+const container = document.getElementById("container");
+const loading   = document.getElementById("loading");
+
+const allLayers = [];
+
+// ────────────────────────────────────────────────
+// CREATE LAYERS FROM ONE SVG
+// ────────────────────────────────────────────────
+function addWavesFromSvg(svgElement, fileIndex) {
+  const baseHue = fileIndex === 0 ? 190 : 310; // blue-cyan vs magenta-purple range
+
+  for (let i = 0; i < WAVES_PER_FILE; i++) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "wave";
+
+    const clone = svgElement.cloneNode(true);
+
+    // Gentle rotation — opposite direction per file
+    const rotDirection = fileIndex === 0 ? 1 : -1;
+    const rot = i * 360 / (WAVES_PER_FILE * 3) * rotDirection;
+    if (rot !== 0) {
+      clone.style.transform = `rotate(${rot}deg)`;
+    }
+
+    // Color tint per layer + per file
+    const hue = (baseHue + i * (360 / WAVES_PER_FILE)) % 360;
+    clone.querySelectorAll("path").forEach(p => {
+      p.setAttribute("stroke", `hsl(${hue}, 85%, 72%)`);
+    });
+
+    wrapper.appendChild(clone);
+    container.appendChild(wrapper);
+    allLayers.push(wrapper);
+  }
+}
+
+// ────────────────────────────────────────────────
+// LOAD BOTH FILES
+// ────────────────────────────────────────────────
+Promise.all(
+  FILES.map((file, idx) =>
+    fetch(file)
+      .then(r => {
+        if (!r.ok) throw new Error(`Cannot load ${file} — ${r.status}`);
+        return r.text();
+      })
+      .then(text => {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, "image/svg+xml");
+        const svg = doc.documentElement;
+
+        svg.removeAttribute("width");
+        svg.removeAttribute("height");
+
+        if (!svg.hasAttribute("viewBox")) {
+          svg.setAttribute("viewBox", "0 0 100 100");
+        }
+
+        return { svg, idx };
+      })
+  )
+)
+.then(results => {
+  loading.style.display = "none";
+
+  results.forEach(({ svg, idx }) => {
+    addWavesFromSvg(svg, idx);
+  });
+
+  // ────────────────────────────────────────────────
+  // ANIMATION
+  // ────────────────────────────────────────────────
+  let start = null;
+
+  function tick(ts) {
+    if (!start) start = ts;
+    const elapsed = ts - start;
+    const progress = (elapsed % CYCLE_MS) / CYCLE_MS;
+
+    allLayers.forEach((layer, i) => {
+      const phase = (progress + i / allLayers.length) % 1;
+      const scale = MIN_SCALE + (MAX_SCALE - MIN_SCALE) * phase;
+      const opacity = Math.pow(Math.sin(phase * Math.PI), OPACITY_POWER) * 0.94;
+
+      layer.style.transform = `scale(${scale})`;
+      layer.style.opacity = opacity;
+    });
+
+    requestAnimationFrame(tick);
+  }
+
+  requestAnimationFrame(tick);
+})
+.catch(err => {
+  loading.innerHTML = `Error: ${err.message}<br><small>Make sure both diagram.svg and diagram-2.svg are in the same folder.</small>`;
+  loading.style.color = "#f44";
+  console.error(err);
+});
+</script>
+
+</body>
+</html>
