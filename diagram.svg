@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
-  <path stroke-linecap="round" stroke-width="8" stroke="#00aaff" fill="none" d="M 40 40 L 160 40 L 160 160 L 40 160 Z"></path>
+  <path stroke-linecap="round" stroke-width="8" stroke="#00aaff" fill="none" d="M 40 40 C 120 -40 240 80 160 160 C 131.716 188.284 68.284 188.284 40 160 C 11.716 131.716 11.716 68.284 40 40 Z"/>
 </svg>
