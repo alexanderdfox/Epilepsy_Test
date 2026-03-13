@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Hyper Spider Cursor - Multi Pointer Spawn</title>
+<style>
+body{
+  margin:0;
+  background:black;
+  overflow:hidden;
+  cursor:none;
+}
+canvas{
+  display:block;
+  position:fixed;
+  top:0;
+  left:0;
+  pointer-events:none;
+}
+button{
+  position:absolute;
+  padding:12px 20px;
+  font-size:16px;
+}
+</style>
+</head>
+<body>
+
+<button style="top:200px;left:200px">Button A</button>
+<button style="top:400px;left:500px">Button B</button>
+<button style="top:150px;left:700px">Button C</button>
+
+<canvas id="c"></canvas>
+
+<script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// ----------------
+// pointers
+// ----------------
+let pointers = {}; // { pointerId: spiderIndex }
+
+// ----------------
+// spiders
+// ----------------
+let spiders = [];
+
+// ----------------
+// web strands
+// ----------------
+let strands = [];
+function addStrand(a,b){
+  strands.push({a,b,offset:0,vel:0});
+}
+function connectNetwork(){
+  strands = [];
+  for(let i=0;i<spiders.length;i++){
+	for(let j=i+1;j<spiders.length;j++){
+	  if(Math.random()<0.5){
+		addStrand(i,j);
+	  }
+	}
+  }
+}
+
+// ----------------
+// pointer events
+// ----------------
+window.addEventListener("pointerdown", e=>{
+  // spawn a spider for this pointer
+  let spider = {
+	x: e.clientX,
+	y: e.clientY,
+	step: Math.random()*10,
+	angle: 0
+  };
+  let index = spiders.push(spider) - 1;
+  pointers[e.pointerId] = index;
+  connectNetwork();
+});
+
+window.addEventListener("pointermove", e=>{
+  if(pointers[e.pointerId] !== undefined){
+	let s = spiders[pointers[e.pointerId]];
+	let dx = e.clientX - s.x;
+	let dy = e.clientY - s.y;
+	s.angle = Math.atan2(dy, dx);
+	s.x = e.clientX;
+	s.y = e.clientY;
+  }
+});
+
+window.addEventListener("pointerup", e=>{
+  // optional: remove spider on pointer up
+  // let index = pointers[e.pointerId];
+  // spiders.splice(index, 1);
+  // delete pointers[e.pointerId];
+  // connectNetwork();
+  delete pointers[e.pointerId]; // keep spider, just release control
+});
+
+// ----------------
+// teleport to clickable
+// ----------------
+function jumpToClickable(){
+  let el=[...document.querySelectorAll("button,a,input")];
+  if(el.length===0) return;
+  let target=el[Math.floor(Math.random()*el.length)];
+  let r=target.getBoundingClientRect();
+  if(spiders.length>0){
+	spiders[0].x = r.left + r.width/2;
+	spiders[0].y = r.top + r.height/2;
+  }
+}
+setInterval(jumpToClickable,8000);
+
+// ----------------
+// physics update
+// ----------------
+function updatePhysics(){
+  for(let s of strands){
+	let A=spiders[s.a];
+	let B=spiders[s.b];
+	let dx=B.x-A.x;
+	let dy=B.y-A.y;
+	let dist=Math.sqrt(dx*dx+dy*dy);
+	let tension=(dist-200)*0.001;
+	s.vel += -s.offset*0.1;
+	s.vel += tension;
+	s.vel *= 0.9;
+	s.offset += s.vel;
+  }
+}
+
+// ----------------
+// draw strands
+// ----------------
+function drawStrands(){
+  for(let s of strands){
+	let A=spiders[s.a];
+	let B=spiders[s.b];
+	let mx=(A.x+B.x)/2;
+	let my=(A.y+B.y)/2;
+	let nx=(B.y-A.y)*0.1;
+	let ny=(A.x-B.x)*0.1;
+	ctx.strokeStyle="rgba(0,200,255,.6)";
+	ctx.lineWidth=2;
+	ctx.beginPath();
+	ctx.moveTo(A.x,A.y);
+	ctx.quadraticCurveTo(mx+nx*s.offset,my+ny*s.offset,B.x,B.y);
+	ctx.stroke();
+  }
+}
+
+// ----------------
+// draw spider
+// ----------------
+function drawSpider(sp){
+  let cx = sp.x;
+  let cy = sp.y;
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(sp.angle || 0);
+  sp.step += 0.1;
+
+  // body
+  ctx.strokeStyle="white";
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.moveTo(-5,0);
+  ctx.lineTo(8,0);
+  ctx.stroke();
+
+  // legs
+  for(let i=0;i<8;i++){
+	let a = i*Math.PI/4;
+	let walk = Math.sin(sp.step+(i%2))*6;
+	let x1 = Math.cos(a)*10;
+	let y1 = Math.sin(a)*10;
+	let x2 = Math.cos(a)*(20+walk);
+	let y2 = Math.sin(a)*(20-walk);
+	ctx.strokeStyle = `hsl(${i*40},100%,70%)`;
+	ctx.beginPath();
+	ctx.moveTo(x1,y1);
+	ctx.lineTo(x2,y2);
+	ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+// ----------------
+// animation
+// ----------------
+function update(){
+  // drift uncontrolled spiders
+  for(let i=0;i<spiders.length;i++){
+	if(!Object.values(pointers).includes(i)){
+	  let s = spiders[i];
+	  s.x += Math.sin(Date.now()*0.001+i)*0.3;
+	  s.y += Math.cos(Date.now()*0.001+i)*0.3;
+	  s.angle = 0;
+	}
+  }
+
+  updatePhysics();
+}
+
+function draw(){
+  ctx.fillStyle="rgba(0,0,0,.25)";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  drawStrands();
+  for(let s of spiders){
+	drawSpider(s);
+  }
+  requestAnimationFrame(loop);
+}
+
+function loop(){
+  update();
+  draw();
+}
+
+loop();
+</script>
+</body>
+</html>
