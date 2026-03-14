@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pi Spiral Blocks</title>
+
+<style>
+
+body{
+	margin:0;
+	background:#000;
+	color:white;
+	font-family:Arial;
+
+	display:flex;
+	flex-direction:column;
+	align-items:center;
+	justify-content:flex-start;
+
+	height:100vh;
+}
+
+#controls{
+	padding:12px;
+}
+
+#canvasContainer{
+	flex:1;
+
+	display:flex;
+	align-items:center;
+	justify-content:center;
+
+	width:100%;
+}
+
+canvas{
+	background:black;
+	max-width:95vw;
+	max-height:90vh;
+}
+
+label{
+	margin-right:6px;
+}
+
+input{
+	width:80px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div id="controls">
+
+<label>Digits</label>
+<input id="digits" type="number" value="666" min="10" max="5000">
+
+<label>Block</label>
+<input id="block" type="number" value="10" min="2" max="30">
+
+<button onclick="generate()">Generate</button>
+
+</div>
+
+<div id="canvasContainer">
+<canvas id="canvas"></canvas>
+</div>
+
+<script>
+
+const canvas = document.getElementById("canvas")
+const ctx = canvas.getContext("2d")
+
+const appleColors = [
+"#61bb46",
+"#fdb827",
+"#f5821f",
+"#e03a3e",
+"#963d97",
+"#009ddc"
+]
+
+let blocks=[]
+let rotation=0
+
+const ANGLE_STEP = 11 * Math.PI / 180
+const RADIUS_STEP = 0.2
+
+
+function piDigits(n){
+
+let q=1n,r=0n,t=1n,k=1n,m=3n,x=3n
+let digits=[]
+
+while(digits.length < n){
+
+if(4n*q + r - t < m*t){
+
+digits.push(Number(m))
+
+let q2 = 10n*q
+let r2 = 10n*(r - m*t)
+let t2 = t
+let k2 = k
+let m2 = (10n*(3n*q + r))/t - 10n*m
+let x2 = x
+
+q=q2
+r=r2
+t=t2
+k=k2
+m=m2
+x=x2
+
+}else{
+
+let q2 = q*k
+let r2 = (2n*q + r)*x
+let t2 = t*x
+let k2 = k+1n
+let m2 = (q*(7n*k+2n) + r*x)/(t*x)
+let x2 = x+2n
+
+q=q2
+r=r2
+t=t2
+k=k2
+m=m2
+x=x2
+
+}
+
+}
+
+return digits
+}
+
+
+function generate(){
+
+let DIGITS = parseInt(document.getElementById("digits").value)
+let BLOCK = parseInt(document.getElementById("block").value)
+
+let digits = piDigits(DIGITS)
+
+blocks=[]
+
+let angle=0
+let radius=0
+let maxExtent=0
+let positions=[]
+
+for(let i=0;i<digits.length;i++){
+
+radius+=RADIUS_STEP
+angle+=ANGLE_STEP
+
+let x=radius*Math.cos(angle)
+let y=radius*Math.sin(angle)
+
+positions.push([x,y])
+
+maxExtent=Math.max(maxExtent,Math.abs(x),Math.abs(y))
+
+}
+
+let size = (maxExtent + 5) * BLOCK * 2
+
+canvas.width=size
+canvas.height=size
+
+let center=size/2
+
+for(let p of positions){
+
+let px=center + p[0]*BLOCK
+let py=center + p[1]*BLOCK
+
+blocks.push({
+x:px,
+y:py,
+size:BLOCK,
+color:appleColors[Math.floor(Math.random()*appleColors.length)]
+})
+
+}
+
+}
+
+
+function draw(){
+
+ctx.clearRect(0,0,canvas.width,canvas.height)
+
+ctx.save()
+
+ctx.translate(canvas.width/2,canvas.height/2)
+
+rotation+=0.003
+
+ctx.rotate(rotation)
+
+ctx.translate(-canvas.width/2,-canvas.height/2)
+
+for(let b of blocks){
+
+ctx.fillStyle=b.color
+ctx.fillRect(b.x,b.y,b.size,b.size)
+
+}
+
+ctx.restore()
+
+requestAnimationFrame(draw)
+
+}
+
+generate()
+draw()
+
+</script>
+
+</body>
+</html>
