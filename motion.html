@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Combined Collatz & Pi Spiral Blocks</title>
+<style>
+body{
+	margin:0;
+	background:#000;
+	color:white;
+	font-family:Arial;
+	display:flex;
+	flex-direction:column;
+	align-items:center;
+	justify-content:flex-start;
+	height:100vh;
+}
+
+#controls{
+	padding:12px;
+	display:flex;
+	flex-wrap:wrap;
+	gap:12px;
+}
+
+#canvasContainer{
+	flex:1;
+	display:flex;
+	align-items:center;
+	justify-content:center;
+	width:100%;
+}
+
+canvas{
+	background:black;
+	max-width:95vw;
+	max-height:90vh;
+}
+
+label{ margin-right:6px; }
+input{ width:80px; }
+</style>
+</head>
+
+<body>
+
+<div id="controls">
+
+<!-- Collatz Controls -->
+<div>
+<h3>Collatz Spiral</h3>
+<label>Steps</label>
+<input id="collatzSteps" type="number" value="666" min="10" max="10000">
+<label>Block</label>
+<input id="collatzBlock" type="number" value="10" min="2" max="30">
+<label>Start n</label>
+<input id="collatzStart" type="number" value="27" min="2"><br>
+<label>Spin Dir</label>
+<select id="collatzDir">
+	<option value="1">Clockwise</option>
+	<option value="-1">Counterclockwise</option>
+</select>
+<button onclick="generateCollatz()">Generate</button>
+</div>
+
+<!-- Pi Controls -->
+<div>
+<h3>Pi Spiral</h3>
+<label>Digits</label>
+<input id="piDigits" type="number" value="666" min="10" max="5000">
+<label>Block</label>
+<input id="piBlock" type="number" value="10" min="2" max="30"><br>
+<label>Spin Dir</label>
+<select id="piDir">
+	<option value="1">Clockwise</option>
+	<option value="-1">Counterclockwise</option>
+</select>
+<button onclick="generatePi()">Generate</button>
+</div>
+
+</div>
+
+<div id="canvasContainer">
+<canvas id="canvas"></canvas>
+</div>
+
+<script>
+const canvas = document.getElementById("canvas")
+const ctx = canvas.getContext("2d")
+
+const appleColors = [
+"#61bb46","#fdb827","#f5821f","#e03a3e","#963d97","#009ddc"
+]
+
+// -------------------- Collatz --------------------
+let collatzBlocks=[]
+let collatzRotation=0
+const COLL_ANGLE_STEP = 11 * Math.PI / 180
+const COLL_RADIUS_STEP = 0.2
+
+function collatzDigits(start, steps){
+	let n = BigInt(start)
+	let digits=[]
+	for(let i=0;i<steps;i++){
+		digits.push(Number(n % 10n))
+		if(n===1n) break
+		if(n % 2n === 0n) n = n / 2n
+		else n = 3n*n + 1n
+	}
+	return digits
+}
+
+function generateCollatz(){
+	let STEPS = parseInt(document.getElementById("collatzSteps").value)
+	let BLOCK = parseInt(document.getElementById("collatzBlock").value)
+	let START = parseInt(document.getElementById("collatzStart").value)
+	let digits = collatzDigits(START, STEPS)
+	collatzBlocks=[]
+	let angle=0, radius=0, maxExtent=0, positions=[]
+	for(let i=0;i<digits.length;i++){
+		radius+=COLL_RADIUS_STEP
+		angle+=COLL_ANGLE_STEP
+		let x=radius*Math.cos(angle)
+		let y=radius*Math.sin(angle)
+		positions.push([x,y])
+		maxExtent=Math.max(maxExtent,Math.abs(x),Math.abs(y))
+	}
+	adjustCanvas(maxExtent)
+	for(let p of positions){
+		let px=p[0]*BLOCK
+		let py=p[1]*BLOCK
+		collatzBlocks.push({x:px, y:py, size:BLOCK, color:appleColors[Math.floor(Math.random()*appleColors.length)]})
+	}
+}
+
+// -------------------- Pi --------------------
+let piBlocks=[]
+let piRotation=0
+const PI_ANGLE_STEP = 11 * Math.PI / 180
+const PI_RADIUS_STEP = 0.2
+
+function piDigits(n){
+	let q=1n,r=0n,t=1n,k=1n,m=3n,x=3n
+	let digits=[]
+	while(digits.length < n){
+		if(4n*q + r - t < m*t){
+			digits.push(Number(m))
+			let q2 = 10n*q
+			let r2 = 10n*(r - m*t)
+			let t2 = t
+			let k2 = k
+			let m2 = (10n*(3n*q + r))/t - 10n*m
+			let x2 = x
+			q=q2; r=r2; t=t2; k=k2; m=m2; x=x2
+		}else{
+			let q2 = q*k
+			let r2 = (2n*q + r)*x
+			let t2 = t*x
+			let k2 = k+1n
+			let m2 = (q*(7n*k+2n) + r*x)/(t*x)
+			let x2 = x+2n
+			q=q2; r=r2; t=t2; k=k2; m=m2; x=x2
+		}
+	}
+	return digits
+}
+
+function generatePi(){
+	let DIGITS = parseInt(document.getElementById("piDigits").value)
+	let BLOCK = parseInt(document.getElementById("piBlock").value)
+	let digits = piDigits(DIGITS)
+	piBlocks=[]
+	let angle=0, radius=0, maxExtent=0, positions=[]
+	for(let i=0;i<digits.length;i++){
+		radius+=PI_RADIUS_STEP
+		angle+=PI_ANGLE_STEP
+		let x=radius*Math.cos(angle)
+		let y=radius*Math.sin(angle)
+		positions.push([x,y])
+		maxExtent=Math.max(maxExtent,Math.abs(x),Math.abs(y))
+	}
+	adjustCanvas(maxExtent)
+	for(let p of positions){
+		let px=p[0]*BLOCK
+		let py=p[1]*BLOCK
+		piBlocks.push({x:px, y:py, size:BLOCK, color:appleColors[Math.floor(Math.random()*appleColors.length)]})
+	}
+}
+
+// -------------------- Canvas Adjustment --------------------
+function adjustCanvas(maxExtent){
+	let size = (maxExtent + 5) * 20
+	if(size < canvas.width) size = canvas.width
+	canvas.width = size
+	canvas.height = size
+}
+
+// -------------------- Draw --------------------
+function draw(){
+	ctx.clearRect(0,0,canvas.width,canvas.height)
+	const centerX = canvas.width/2
+	const centerY = canvas.height/2
+
+	const collatzDir = parseInt(document.getElementById("collatzDir").value)
+	const piDir = parseInt(document.getElementById("piDir").value)
+
+	// Collatz spiral
+	ctx.save()
+	ctx.translate(centerX, centerY)
+	collatzRotation += 0.003 * collatzDir
+	ctx.rotate(collatzRotation)
+	for(let b of collatzBlocks){
+		ctx.fillStyle=b.color
+		ctx.fillRect(b.x, b.y, b.size, b.size)
+	}
+	ctx.restore()
+
+	// Pi spiral
+	ctx.save()
+	ctx.translate(centerX, centerY)
+	piRotation += 0.002 * piDir
+	ctx.rotate(piRotation)
+	for(let b of piBlocks){
+		ctx.fillStyle=b.color
+		ctx.fillRect(b.x, b.y, b.size, b.size)
+	}
+	ctx.restore()
+
+	requestAnimationFrame(draw)
+}
+
+// -------------------- Init --------------------
+generateCollatz()
+generatePi()
+draw()
+</script>
+
+</body>
+</html>
