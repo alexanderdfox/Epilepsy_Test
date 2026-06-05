@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Infinite Bomb - Accessible & Interactive Experience</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Times New Roman', serif;
+            color: #e0e0e0;
+            display: flex;
+        }
+
+        /* Screen Reader Only utility class */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+
+        /* Epilepsy & Audio Consent Overlay */
+        #warning-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #0a0a0c;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .warning-card {
+            background: #111;
+            border: 2px solid #ff4d4d;
+            border-radius: 8px;
+            padding: 40px;
+            max-width: 600px;
+            box-shadow: 0 0 30px rgba(255, 77, 77, 0.2);
+        }
+
+        .warning-card h2 {
+            color: #ff4d4d;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 0;
+        }
+
+        .warning-card p {
+            color: #ccc;
+            line-height: 1.6;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background-color: #d4af37;
+            color: #000;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1.1rem;
+            font-family: inherit;
+            cursor: pointer;
+            margin-top: 20px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            transition: background 0.3s;
+        }
+
+        .btn-primary:hover, .btn-primary:focus {
+            background-color: #fff;
+            outline: 3px solid #ff6b35;
+        }
+
+        /* Main layouts */
+        #canvas-container {
+            position: relative;
+            width: 65%;
+            height: 100%;
+            background: radial-gradient(circle at center, #100b14 0%, #020203 100%);
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        #story-container {
+            width: 35%;
+            height: 100%;
+            background: linear-gradient(to right, #0a0a0a, #050505);
+            border-left: 1px solid #222;
+            padding: 40px;
+            overflow-y: auto;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+
+        /* Accessibility Toolbar */
+        #a11y-toolbar {
+            background: #111;
+            padding: 10px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .a11y-btn {
+            background: #222;
+            color: #eee;
+            border: 1px solid #444;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .a11y-btn:hover, .a11y-btn:focus {
+            background: #d4af37;
+            color: #000;
+            outline: 2px solid #fff;
+        }
+
+        /* Custom Scrollbar */
+        #story-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        #story-container::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+        #story-container::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 3px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: normal;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 30px;
+            color: #d4af37;
+            text-align: center;
+            border-bottom: 1px solid #333;
+            padding-bottom: 15px;
+        }
+
+        p {
+            line-height: 1.8;
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            color: #b0b0b0;
+            text-align: justify;
+            transition: color 0.5s ease;
+        }
+
+        .highlight {
+            color: #ff6b35;
+            text-shadow: 0 0 5px rgba(255,107,53,0.3);
+        }
+
+        .implode-text {
+            color: #7054ff;
+            text-shadow: 0 0 5px rgba(112,84,255,0.3);
+        }
+
+        /* High Contrast Mode Override */
+        body.high-contrast {
+            background-color: #000 !important;
+            color: #fff !important;
+        }
+        body.high-contrast #story-container {
+            background: #000 !important;
+        }
+        body.high-contrast p {
+            color: #fff !important;
+            font-weight: bold;
+        }
+        body.high-contrast .highlight, body.high-contrast .implode-text {
+            color: #ffff00 !important;
+            text-shadow: none !important;
+        }
+
+        /* Responsive design */
+        @media (max-width: 900px) {
+            body {
+                flex-direction: column-reverse;
+            }
+            #canvas-container {
+                width: 100%;
+                height: 50%;
+            }
+            #story-container {
+                width: 100%;
+                height: 50%;
+                border-left: none;
+                border-top: 1px solid #222;
+                padding: 25px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="warning-overlay" role="dialog" aria-modal="true" aria-labelledby="warning-heading" aria-describedby="warning-desc">
+        <div class="warning-card">
+            <h2 id="warning-heading">⚠️ Photosensitivity & Audio Warning</h2>
+            <div id="warning-desc">
+                <p>This experience generates dynamic, non-periodic flashing light patterns, fast-moving structural particles, and a continuous low-frequency sub-bass acoustic hum overlaid with high-frequency sound textures.</p>
+                <p>It simulates a state of perpetual explosion and implosion. If you have medical sensitivities to flash triggers, vestibular conditions, or epilepsy, please proceed with caution.</p>
+            </div>
+            <button class="btn-primary" id="accept-btn">I Understand - Enter Experience</button>
+        </div>
+    </div>
+
+    <div id="a11y-live-region" class="sr-only" aria-live="polite"></div>
+
+    <div id="canvas-container" aria-hidden="true">
+        <canvas id="bombCanvas"></canvas>
+    </div>
+
+    <div id="story-container" role="main">
+        <div id="a11y-toolbar" role="toolbar" aria-label="Accessibility Utilities">
+            <button class="a11y-btn" id="toggle-audio" aria-pressed="false">Mute Cosmic Audio</button>
+            <button class="a11y-btn" id="toggle-motion" aria-pressed="false">Freeze Animation</button>
+            <button class="a11y-btn" id="toggle-contrast" aria-pressed="false">High Contrast Mode</button>
+            <button class="a11y-btn" id="read-story" aria-label="Read narrative aloud">Speak Text</button>
+        </div>
+
+        <h1 tabindex="0">The Tesseract Bomb</h1>
+        <p tabindex="0">There was once a king who desired a weapon that could never be exhausted.</p>
+        <p tabindex="0">His engineers forged him a Bomb in the shape of a <span class="implode-text">tesseract</span>.</p>
+        <p tabindex="0">The Bomb was strange. It did not explode once. It <span class="highlight">exploded forever</span>.</p>
+        <p tabindex="0">At every instant it burst outward with the force of a thousand suns, yet at the same instant it collapsed inward with equal fury. It consumed itself and recreated itself in the same breath. Its fire raced to the edge of creation while its ashes fell into a point smaller than dust.</p>
+        <p tabindex="0">The king asked, "When will it finish exploding?"</p>
+        <p tabindex="0">The engineers answered, "It cannot. Its explosion is fed by its implosion, and its implosion is fed by its explosion."</p>
+        <p tabindex="0">The king smiled, for he thought he had obtained infinite power.</p>
+        <p tabindex="0">Years passed.</p>
+        <p tabindex="0">The Bomb destroyed no cities. It conquered no enemies. It remained suspended in the vault beneath the palace, endlessly becoming and unbecoming itself.</p>
+        <p tabindex="0">The king grew old.</p>
+        <p tabindex="0">"Why does it do nothing?" he demanded.</p>
+        <p tabindex="0">The oldest engineer replied, "Because <span class="highlight">all its power is spent on itself</span>."</p>
+        <p tabindex="0">The king descended into the vault to see.</p>
+        <p tabindex="0">There hung the tesseract, brilliant and terrible. Worlds of flame blossomed from its faces. Oceans of darkness folded into its corners. It was the most violent thing in existence.</p>
+        <p tabindex="0">And yet not a grain of dust around it was disturbed.</p>
+        <p tabindex="0">The king watched for a long time.</p>
+        <p tabindex="0">Then he understood.</p>
+        <p tabindex="0" style="border-left: 3px solid #d4af37; padding-left: 10px; font-style: italic;">A thing may possess infinite power and still accomplish nothing if all its force is consumed by its own contradictions.</p>
+        <p tabindex="0">The king left the vault in silence.</p>
+        <p tabindex="0">When he died, the Bomb remained.</p>
+        <p class="highlight" tabindex="0" style="text-align: center; font-weight: bold; letter-spacing: 2px;">Still exploding.</p>
+        <p class="implode-text" tabindex="0" style="text-align: center; font-weight: bold; letter-spacing: 2px;">Still imploding.</p>
+        <p tabindex="0" style="text-align: center; font-style: italic; color: #888;">Still mistaking motion for change.</p>
+    </div>
+
+    <script>
+        // Core state toggles for disability/accessibility profiling
+        let isAudioMuted = false;
+        let isMotionFrozen = false;
+        let audioInitialized = false;
+
+        // Web Audio Nodes Global references
+        let audioCtx, explosionNoise, implosionOsc, coreHum, explosionGain, implosionGain, masterGain;
+
+        const canvas = document.getElementById('bombCanvas');
+        const ctx = canvas.getContext('2d');
+        const liveRegion = document.getElementById('a11y-live-region');
+
+        function announceToScreenReader(message) {
+            liveRegion.textContent = message;
+        }
+
+        // --- Web Audio Synthesis Engine ---
+        function initAudioEngine() {
+            if (audioInitialized) return;
+            
+            try {
+                // Instantiate cross-browser audio engine environment
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+                
+                masterGain = audioCtx.createGain();
+                masterGain.gain.setValueAtTime(0.2, audioCtx.currentTime); // Standard normalized scaling volume
+                masterGain.connect(audioCtx.destination);
+
+                // 1. The Core Hum: Paradoxical Base Frequency (Low C-chord sub-octave)
+                coreHum = audioCtx.createOscillator();
+                coreHum.type = 'sawtooth';
+                coreHum.frequency.setValueAtTime(32.70, audioCtx.currentTime); // C1 sub-bass
+                
+                // Filter out abrasive high harshes of standard sawtooth
+                let lowpass = audioCtx.createBiquadFilter();
+                lowpass.type = 'lowpass';
+                lowpass.frequency.setValueAtTime(120, audioCtx.currentTime);
+                
+                coreHum.connect(lowpass);
+                lowpass.connect(masterGain);
+                coreHum.start();
+
+                // 2. The Perpetual Explosion Track: White Noise Processed Buffer
+                const bufferSize = audioCtx.sampleRate * 2;
+                const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const output = noiseBuffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    output[i] = Math.random() * 2 - 1;
+                }
+                
+                explosionNoise = audioCtx.createBufferSource();
+                explosionNoise.buffer = noiseBuffer;
+                explosionNoise.loop = true;
+
+                let explosionFilter = audioCtx.createBiquadFilter();
+                explosionFilter.type = 'bandpass';
+                explosionFilter.frequency.setValueAtTime(350, audioCtx.currentTime);
+                explosionFilter.Q.setValueAtTime(1.5, audioCtx.currentTime);
+
+                explosionGain = audioCtx.createGain();
+                explosionGain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+
+                explosionNoise.connect(explosionFilter);
+                explosionFilter.connect(explosionGain);
+                explosionGain.connect(masterGain);
+                explosionNoise.start();
+
+                // 3. The Perpetual Implosion Track: Sweeping Inward Resonator
+                implosionOsc = audioCtx.createOscillator();
+                implosionOsc.type = 'sine';
+                implosionOsc.frequency.setValueAtTime(880, audioCtx.currentTime);
+
+                implosionGain = audioCtx.createGain();
+                implosionGain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+
+                implosionOsc.connect(implosionGain);
+                implosionGain.connect(masterGain);
+                implosionOsc.start();
+
+                // Begin paradoxical sonic cross-modulation lifecycle
+                modulateAudioEngine();
+                audioInitialized = true;
+            } catch(e) {
+                console.error("Web Audio API not natively supported or intercepted by browser profile safety restrictions", e);
+            }
+        }
+
+        // Modulates audio dynamically over time to reflect the expanding and collapsing states
+        function modulateAudioEngine() {
+            if (!audioCtx || isAudioMuted || isMotionFrozen) {
+                if (audioCtx && !isAudioMuted) {
+                    // Keep requesting framework updates but skip audio sweeps if frozen
+                    requestAnimationFrame(modulateAudioEngine);
+                }
+                return;
+            }
+
+            const now = audioCtx.currentTime;
+            // Capture rhythmic pulsation profile synced with visual structural respiration bounds
+            const timeFactor = Date.now() * 0.005;
+            const wave = Math.sin(timeFactor); // Cycles smoothly from -1 to 1
+
+            // Dynamic expansion modulation: increases noise band width as shape stretches
+            if(explosionGain) {
+                let currentExpVol = 0.05 + (wave + 1) * 0.04; 
+                explosionGain.gain.setValueAtTime(currentExpVol, now);
+            }
+
+            // Paradoxical implosion mapping: frequency sweeps up to infinity as visuals shrink
+            if(implosionOsc && implosionGain) {
+                let inverseWave = -wave; 
+                let targetFreq = 440 + (inverseWave + 1) * 330; // Shifting spatial coordinates
+                implosionOsc.frequency.setValueAtTime(targetFreq, now);
+                
+                let currentImpVol = 0.02 + (inverseWave + 1) * 0.03;
+                implosionGain.gain.setValueAtTime(currentImpVol, now);
+            }
+
+            requestAnimationFrame(modulateAudioEngine);
+        }
+
+        // --- Visual Engine Rendering (Tesseract Loop) ---
+        function resize() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        let vertices4D = [];
+        for (let x of [-1, 1]) {
+            for (let y of [-1, 1]) {
+                for (let z of [-1, 1]) {
+                    for (let w of [-1, 1]) {
+                        vertices4D.push({x, y, z, w});
+                    }
+                }
+            }
+        }
+
+        const edges = [];
+        for (let i = 0; i < 16; i++) {
+            for (let j = i + 1; j < 16; j++) {
+                let diff = 0;
+                if (vertices4D[i].x !== vertices4D[j].x) diff++;
+                if (vertices4D[i].y !== vertices4D[j].y) diff++;
+                if (vertices4D[i].z !== vertices4D[j].z) diff++;
+                if (vertices4D[i].w !== vertices4D[j].w) diff++;
+                if (diff === 1) edges.push([i, j]);
+            }
+        }
+
+        const particles = [];
+        const maxParticles = 400;
+
+        class Particle {
+            constructor(isExplosion) {
+                this.isExplosion = isExplosion;
+                this.reset();
+            }
+
+            reset() {
+                const center = { x: canvas.width / 2, y: canvas.height / 2 };
+                const maxRadius = Math.max(canvas.width, canvas.height) * 0.6;
+                
+                if (this.isExplosion) {
+                    this.x = center.x;
+                    this.y = center.y;
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = Math.random() * 3 + 1;
+                    this.vx = Math.cos(angle) * speed;
+                    this.vy = Math.sin(angle) * speed;
+                    this.life = Math.random() * 60 + 40;
+                    this.maxLife = this.life;
+                    this.size = Math.random() * 3 + 1;
+                    this.color = `rgba(${Math.floor(Math.random()*55 + 200)}, ${Math.floor(Math.random()*100 + 50)}, 0, `;
+                } else {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = Math.random() * maxRadius + 100;
+                    this.x = center.x + Math.cos(angle) * dist;
+                    this.y = center.y + Math.sin(angle) * dist;
+                    this.life = Math.random() * 80 + 40;
+                    this.maxLife = this.life;
+                    this.size = Math.random() * 2 + 1;
+                    this.color = `rgba(${Math.floor(Math.random()*80 + 60)}, 0, ${Math.floor(Math.random()*150 + 100)}, `;
+                }
+            }
+
+            update() {
+                if (isMotionFrozen) return; // Prevent calculations when execution freeze is requested
+
+                const center = { x: canvas.width / 2, y: canvas.height / 2 };
+                
+                if (this.isExplosion) {
+                    this.x += this.vx;
+                    this.y += this.vy;
+                } else {
+                    const dx = center.x - this.x;
+                    const dy = center.y - this.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < 5) {
+                        this.reset();
+                        return;
+                    }
+                    
+                    const force = 0.05 + (15 / (dist + 10)); 
+                    this.x += (dx / dist) * (2 + force);
+                    this.y += (dy / dist) * (2 + force);
+                }
+
+                this.life--;
+                if (this.life <= 0) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                const alpha = this.life / this.maxLife;
+                ctx.fillStyle = this.color + alpha + ')';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < maxParticles; i++) {
+            particles.push(new Particle(i < maxParticles / 2));
+        }
+
+        let angleXY = 0.005;
+        let angleZW = 0.008;
+        let angleXZ = 0.003;
+        let angleYW = 0.006;
+
+        function rotateXY(v, theta) {
+            let x = v.x * Math.cos(theta) - v.y * Math.sin(theta);
+            let y = v.x * Math.sin(theta) + v.y * Math.cos(theta);
+            return {x, y, z: v.z, w: v.w};
+        }
+
+        function rotateXZ(v, theta) {
+            let x = v.x * Math.cos(theta) - v.z * Math.sin(theta);
+            let z = v.x * Math.sin(theta) + v.z * Math.cos(theta);
+            return {x, y: v.y, z, w: v.w};
+        }
+
+        function rotateZW(v, theta) {
+            let z = v.z * Math.cos(theta) - v.w * Math.sin(theta);
+            let w = v.z * Math.sin(theta) + v.w * Math.cos(theta);
+            return {x: v.x, y: v.y, z, w};
+        }
+
+        function rotateYW(v, theta) {
+            let y = v.y * Math.cos(theta) - v.w * Math.sin(theta);
+            let w = v.y * Math.sin(theta) + v.w * Math.cos(theta);
+            return {x: v.x, y, z: v.z, w};
+        }
+
+        // Track timeline reference independent of dynamic performance ticks
+        let customTimeline = 0;
+
+        function animate() {
+            ctx.fillStyle = 'rgba(5, 4, 7, 0.25)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            
+            if (!isMotionFrozen) {
+                customTimeline += 16.66; // Standard nominal delta tick increment
+            }
+
+            const pulse = 1 + Math.sin(customTimeline * 0.005) * 0.15;
+            const baseScale = Math.min(canvas.width, canvas.height) * 0.22 * pulse;
+
+            ctx.globalCompositeOperation = 'screen';
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            let projected3D = [];
+
+            vertices4D.forEach(v => {
+                // Apply spatial rotations mapped directly to the constant timeline sequence
+                let rotated = rotateXY(v, angleXY * customTimeline * 0.1);
+                rotated = rotateZW(rotated, angleZW * customTimeline * 0.1);
+                rotated = rotateXZ(rotated, angleXZ * customTimeline * 0.1);
+                rotated = rotateYW(rotated, angleYW * customTimeline * 0.1);
+
+                const distance4D = 2.0;
+                const factor4D = 1 / (distance4D - rotated.w);
+                
+                let x3D = rotated.x * factor4D * baseScale;
+                let y3D = rotated.y * factor4D * baseScale;
+                let z3D = rotated.z * factor4D * baseScale;
+
+                const distance3D = 3.0;
+                const factor3D = 1 / (distance3D - (z3D / baseScale));
+                
+                let screenX = cx + x3D * factor3D * 2;
+                let screenY = cy + y3D * factor3D * 2;
+
+                projected3D.push({x: screenX, y: screenY, w: rotated.w});
+            });
+
+            edges.forEach(edge => {
+                const p1 = projected3D[edge[0]];
+                const p2 = projected3D[edge[1]];
+
+                const grad = ctx.createLinearGradient(p1.x, p1.y, p2.x, p2.y);
+                let col1 = p1.w > 0 ? 'rgba(255, 90, 0, 0.8)' : 'rgba(90, 50, 255, 0.5)';
+                let col2 = p2.w > 0 ? 'rgba(255, 180, 0, 0.8)' : 'rgba(0, 190, 255, 0.5)';
+                
+                grad.addColorStop(0, col1);
+                grad.addColorStop(1, col2);
+
+                ctx.strokeStyle = grad;
+                ctx.lineWidth = (p1.w + p2.w + 2) * 1.2 + 0.5;
+                ctx.beginPath();
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.stroke();
+            });
+
+            const glowGrad = ctx.createRadialGradient(cx, cy, 2, cx, cy, baseScale * 0.4);
+            glowGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+            glowGrad.addColorStop(0.2, 'rgba(255, 120, 0, 0.4)');
+            glowGrad.addColorStop(0.6, 'rgba(50, 0, 150, 0.15)');
+            glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = glowGrad;
+            ctx.beginPath();
+            ctx.arc(cx, cy, baseScale * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.globalCompositeOperation = 'source-over';
+            requestAnimationFrame(animate);
+        }
+
+        // --- Accessibility Interactivity Mechanics & Event Handlers ---
+        
+        // Intercept interaction flow to comply with epilepsy warnings and browser user-gesture restrictions
+        document.getElementById('accept-btn').addEventListener('click', () => {
+            document.getElementById('warning-overlay').style.display = 'none';
+            initAudioEngine();
+            animate();
+            announceToScreenReader("Experience unlocked. Use the control panel at the top of the narrative viewport to manage structural properties.");
+            // Set standard interactive keyboard tracking reference target focus
+            document.querySelector('#story-container h1').focus();
+        });
+
+        // Interactive Toolbar Handlers
+        document.getElementById('toggle-audio').addEventListener('click', function() {
+            if (!audioCtx) return;
+            if (isAudioMuted) {
+                masterGain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                this.setAttribute('aria-pressed', 'false');
+                this.textContent = "Mute Cosmic Audio";
+                announceToScreenReader("Audio output active.");
+                isAudioMuted = false;
+                modulateAudioEngine();
+            } else {
+                masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+                this.setAttribute('aria-pressed', 'true');
+                this.textContent = "Unmute Cosmic Audio";
+                announceToScreenReader("Audio muted.");
+                isAudioMuted = true;
+            }
+        });
+
+        document.getElementById('toggle-motion').addEventListener('click', function() {
+            if (isMotionFrozen) {
+                isMotionFrozen = false;
+                this.setAttribute('aria-pressed', 'false');
+                this.textContent = "Freeze Animation";
+                announceToScreenReader("Visual structures rendering freely.");
+            } else {
+                isMotionFrozen = true;
+                this.setAttribute('aria-pressed', 'true');
+                this.textContent = "Unfreeze Animation";
+                announceToScreenReader("Dynamic updates suspended. Motion frozen.");
+            }
+        });
+
+        document.getElementById('toggle-contrast').addEventListener('click', function() {
+            const body = document.body;
+            if (body.classList.contains('high-contrast')) {
+                body.classList.remove('high-contrast');
+                this.setAttribute('aria-pressed', 'false');
+                announceToScreenReader("Standard color palette enabled.");
+            } else {
+                body.classList.add('high-contrast');
+                this.setAttribute('aria-pressed', 'true');
+                announceToScreenReader("High-contrast monochrome theme enabled.");
+            }
+        });
+
+        // Speech Synthesis Narrator implementation for individuals with visual processing differences
+        document.getElementById('read-story').addEventListener('click', () => {
+            if ('speechSynthesis' in window) {
+                // Cancel ongoing sequences before execution
+                window.speechSynthesis.cancel();
+                
+                // Aggregate pure text data from text nodes within the main block container
+                const textParagraphs = document.querySelectorAll('#story-container p');
+                let compositeNarrative = "The Tesseract Bomb. ";
+                textParagraphs.forEach(p => {
+                    compositeNarrative += p.textContent + " ";
+                });
+
+                const utterance = new SpeechSynthesisUtterance(compositeNarrative);
+                utterance.rate = 1.0;
+                
+                utterance.onstart = () => announceToScreenReader("Starting spoken narration processing.");
+                utterance.onend = () => announceToScreenReader("Narration tracking completed.");
+                
+                window.speechSynthesis.speak(utterance);
+            } else {
+                announceToScreenReader("System text-to-speech module not found or unavailable in this browser instance.");
+            }
+        });
+    </script>
+</body>
+</html>
