@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Hurricane Hymn — Cosmic Screensaver</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    cursor: crosshair;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  #hint {
+    position: fixed;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(180, 220, 255, 0.5);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    pointer-events: none;
+    transition: opacity 1.8s ease;
+    text-shadow: 0 0 14px rgba(80, 160, 255, 0.45);
+    text-align: center;
+    max-width: 90vw;
+    line-height: 1.5;
+  }
+  #hint.fade { opacity: 0; }
+  #hud {
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    color: rgba(160, 210, 255, 0.35);
+    font-family: "Segoe UI", system-ui, monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    pointer-events: none;
+    line-height: 1.55;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hint">
+  Drag to look · Scroll / Pinch to zoom · Two-finger drag to strafe<br>
+  Right-drag or Shift-drag for roll · Hurricane Hymn
+</div>
+<div id="hud"></div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const hud = document.getElementById('hud');
+  let W, H, CX, CY;
+
+  // ---------- 6DOF CAMERA ----------
+  const cam = {
+    x: 0, y: 0, z: 0,          // position
+    yaw: 0, pitch: 0, roll: 0,  // orientation (radians)
+    fov: 1.1,                   // field of view factor
+    vel: { x: 0, y: 0, z: 0 },  // velocity for smooth motion
+    rotVel: { yaw: 0, pitch: 0, roll: 0 }
+  };
+
+  // ---------- INPUT STATE ----------
+  const input = {
+    dragging: false,
+    rightDrag: false,
+    lastX: 0, lastY: 0,
+    pointers: new Map(),       // for multi-touch
+    pinchDist: 0,
+    shift: false
+  };
+
+  // ---------- CONFIG ----------
+  const STAR_COUNT = 2800;
+  const NEBULA_COUNT = 9;
+  const FLOW_SPIRAL = 0;
+  const FLOW_RADIAL = 1;
+  const FLOW_TURBULENT = 2;
+  const WORLD_RADIUS = 1400;   // spawn sphere
+
+  const palette = [
+    [40, 20, 90],
+    [20, 60, 140],
+    [0, 180, 220],
+    [80, 40, 180],
+    [220, 60, 140],
+    [255, 160, 40],
+    [180, 220, 255],
+    [255, 100, 80],
+    [100, 255, 180]
+  ];
+
+  function resize() {
+    W = canvas.width = window.innerWidth * devicePixelRatio;
+    H = canvas.height = window.innerHeight * devicePixelRatio;
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+    CX = W * 0.5;
+    CY = H * 0.5;
+  }
+
+  // ---------- NOISE ----------
+  function hash(x, y, z = 0) {
+    const n = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
+    return n - Math.floor(n);
+  }
+  function noise(x, y, z = 0) {
+    const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+    const fx = x - ix, fy = y - iy, fz = z - iz;
+    const u = fx * fx * (3 - 2 * fx);
+    const v = fy * fy * (3 - 2 * fy);
+    const w = fz * fz * (3 - 2 * fz);
+    const a = hash(ix, iy, iz);
+    const b = hash(ix + 1, iy, iz);
+    const c = hash(ix, iy + 1, iz);
+    const d = hash(ix + 1, iy + 1, iz);
+    const e = hash(ix, iy, iz + 1);
+    const f = hash(ix + 1, iy, iz + 1);
+    const g = hash(ix, iy + 1, iz + 1);
+    const h = hash(ix + 1, iy + 1, iz + 1);
+    const lerp = (p, q, t) => p + (q - p) * t;
+    return lerp(
+      lerp(lerp(a, b, u), lerp(c, d, u), v),
+      lerp(lerp(e, f, u), lerp(g, h, u), v),
+      w
+    );
+  }
+
+  // ---------- 3D MATH HELPERS ----------
+  function rotatePoint(px, py, pz, yaw, pitch, roll) {
+    // Apply yaw (Y), then pitch (X), then roll (Z) — camera-relative
+    let x = px, y = py, z = pz;
+
+    // Yaw around Y
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    let x1 = x * cy - z * sy;
+    let z1 = x * sy + z * cy;
+    x = x1; z = z1;
+
+    // Pitch around X
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    let y1 = y * cp - z * sp;
+    z1 = y * sp + z * cp;
+    y = y1; z = z1;
+
+    // Roll around Z
+    const cr = Math.cos(roll), sr = Math.sin(roll);
+    x1 = x * cr - y * sr;
+    y1 = x * sr + y * cr;
+    x = x1; y = y1;
+
+    return { x, y, z };
+  }
+
+  function project(wx, wy, wz) {
+    // World → camera space (subtract cam pos, then inverse-rotate)
+    let x = wx - cam.x;
+    let y = wy - cam.y;
+    let z = wz - cam.z;
+
+    // Inverse rotation (negate angles, reverse order)
+    const r = rotatePoint(x, y, z, -cam.yaw, -cam.pitch, -cam.roll);
+    x = r.x; y = r.y; z = r.z;
+
+    if (z <= 2) return null; // behind or too close
+
+    const scale = (H * 0.55) / (z * cam.fov);
+    const sx = CX + x * scale;
+    const sy = CY - y * scale; // Y up
+    return { x: sx, y: sy, z, scale };
+  }
+
+  // ---------- STAR ----------
+  class Star {
+    constructor() {
+      this.reset(true);
+    }
+
+    reset(initial = false) {
+      // Spherical distribution around origin
+      const u = Math.random();
+      const v = Math.random();
+      const theta = 2 * Math.PI * u;
+      const phi = Math.acos(2 * v - 1);
+      const r = initial
+        ? Math.cbrt(Math.random()) * WORLD_RADIUS
+        : 40 + Math.random() * 120;
+
+      this.x = r * Math.sin(phi) * Math.cos(theta);
+      this.y = r * Math.sin(phi) * Math.sin(theta);
+      this.z = r * Math.cos(phi);
+
+      const roll = Math.random();
+      if (roll < 0.52) this.flow = FLOW_SPIRAL;
+      else if (roll < 0.78) this.flow = FLOW_RADIAL;
+      else this.flow = FLOW_TURBULENT;
+
+      this.angle = Math.atan2(this.z, this.x); // for spiral
+      this.radius = Math.sqrt(this.x * this.x + this.z * this.z);
+      this.speed = 0.4 + Math.random() * 2.2;
+      this.size = 0.5 + Math.random() * 2.8;
+      this.depth = 0.2 + Math.random() * 0.8;
+      this.hueIndex = Math.floor(Math.random() * palette.length);
+      this.pulse = Math.random() * Math.PI * 2;
+      this.turbSeed = Math.random() * 2000;
+      this.trail = [];
+    }
+
+    update(dt) {
+      const dist = Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z) || 0.001;
+
+      if (this.flow === FLOW_SPIRAL) {
+        // Spiral in XZ plane, mild Y bob
+        const spiralStrength = 0.9 + this.depth * 0.35;
+        const radial = (this.radius < 90 ? -0.4 : 0.6) * this.speed * this.depth;
+        this.angle += (0.014 * spiralStrength * this.speed) / (this.radius * 0.0035 + 0.55);
+        this.radius += radial * dt * 16;
+        this.x = Math.cos(this.angle) * this.radius;
+        this.z = Math.sin(this.angle) * this.radius;
+        this.y += Math.sin(this.angle * 2.3 + this.pulse) * 0.15 * this.speed * dt;
+      }
+      else if (this.flow === FLOW_RADIAL) {
+        const nx = this.x / dist;
+        const ny = this.y / dist;
+        const nz = this.z / dist;
+        const boost = 1.05 + Math.sin(time * 0.35 + this.pulse) * 0.22;
+        const s = this.speed * 2.1 * boost * this.depth * dt * 18;
+        this.x += nx * s;
+        this.y += ny * s;
+        this.z += nz * s;
+      }
+      else {
+        // 3D turbulence
+        const n1 = noise(this.x * 0.003 + time * 0.12, this.y * 0.003, this.z * 0.003 + this.turbSeed);
+        const n2 = noise(this.y * 0.003 - time * 0.1, this.z * 0.003, this.x * 0.003 + this.turbSeed + 40);
+        const n3 = noise(this.z * 0.003 + time * 0.09, this.x * 0.003, this.y * 0.003 + this.turbSeed + 80);
+        const orbit = 0.55;
+        // mild spiral bias
+        const ox = -this.z * 0.001 * orbit;
+        const oz =  this.x * 0.001 * orbit;
+        this.x += ((n1 - 0.5) * 5.5 + ox) * this.depth * dt * 20;
+        this.y += ((n2 - 0.5) * 5.5) * this.depth * dt * 20;
+        this.z += ((n3 - 0.5) * 5.5 + oz) * this.depth * dt * 20;
+      }
+
+      this.pulse += 0.035 * this.speed;
+
+      // Recycle when too far from camera or origin
+      const camDist = Math.sqrt(
+        (this.x - cam.x) ** 2 + (this.y - cam.y) ** 2 + (this.z - cam.z) ** 2
+      );
+      if (camDist > WORLD_RADIUS * 1.35 || dist > WORLD_RADIUS * 1.2) {
+        this.reset();
+      }
+    }
+
+    draw(ctx) {
+      const p = project(this.x, this.y, this.z);
+      if (!p) return;
+
+      const col = palette[this.hueIndex];
+      const bright = 0.3 + this.depth * 0.7;
+      const pulse = 0.72 + Math.sin(this.pulse) * 0.28;
+      const alpha = Math.min(1, bright * pulse * (180 / (p.z + 40)));
+      const r = this.size * p.scale * 0.9;
+
+      // Trail (store projected points)
+      this.trail.push({ x: p.x, y: p.y, a: alpha });
+      if (this.trail.length > 4) this.trail.shift();
+
+      if (this.trail.length > 1) {
+        ctx.beginPath();
+        ctx.moveTo(this.trail[0].x, this.trail[0].y);
+        for (let i = 1; i < this.trail.length; i++) {
+          ctx.lineTo(this.trail[i].x, this.trail[i].y);
+        }
+        ctx.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},${alpha * 0.2})`;
+        ctx.lineWidth = Math.max(0.5, r * 0.5);
+        ctx.stroke();
+      }
+
+      // Glow
+      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3.2);
+      g.addColorStop(0, `rgba(${col[0]},${col[1]},${col[2]},${alpha})`);
+      g.addColorStop(0.4, `rgba(${col[0]},${col[1]},${col[2]},${alpha * 0.4})`);
+      g.addColorStop(1, `rgba(${col[0]},${col[1]},${col[2]},0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r * 3.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Core
+      ctx.fillStyle = `rgba(255,255,255,${alpha * 0.85})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, Math.max(0.4, r * 0.32), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // ---------- NEBULA ----------
+  class Nebula {
+    constructor(i) {
+      const a = (i / NEBULA_COUNT) * Math.PI * 2 + Math.random() * 0.7;
+      const elev = (Math.random() - 0.5) * 1.2;
+      const d = 180 + Math.random() * 500;
+      this.x = Math.cos(a) * Math.cos(elev) * d;
+      this.y = Math.sin(elev) * d * 0.7;
+      this.z = Math.sin(a) * Math.cos(elev) * d;
+      this.scale = 220 + Math.random() * 380;
+      this.hueIndex = Math.floor(Math.random() * palette.length);
+      this.spin = (Math.random() - 0.5) * 0.0006;
+      this.pulse = Math.random() * Math.PI * 2;
+      this.alpha = 0.07 + Math.random() * 0.09;
+      this.angle = a;
+    }
+
+    update(dt) {
+      this.angle += this.spin * dt * 50;
+      this.pulse += 0.007;
+      // Slow orbit
+      const d = Math.sqrt(this.x * this.x + this.z * this.z);
+      this.x = Math.cos(this.angle) * d;
+      this.z = Math.sin(this.angle) * d;
+    }
+
+    draw(ctx) {
+      const p = project(this.x, this.y, this.z);
+      if (!p || p.z < 30) return;
+
+      const col = palette[this.hueIndex];
+      const a = this.alpha * (0.65 + Math.sin(this.pulse) * 0.35) * Math.min(1, 200 / p.z);
+      const s = this.scale * p.scale * 0.55;
+
+      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, s);
+      g.addColorStop(0, `rgba(${col[0]},${col[1]},${col[2]},${a})`);
+      g.addColorStop(0.45, `rgba(${col[0]},${col[1]},${col[2]},${a * 0.4})`);
+      g.addColorStop(1, `rgba(${col[0]},${col[1]},${col[2]},0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // ---------- INIT ----------
+  let stars = [];
+  let nebulas = [];
+  let time = 0;
+  let last = performance.now();
+
+  function init() {
+    resize();
+    stars = Array.from({ length: STAR_COUNT }, () => new Star());
+    nebulas = Array.from({ length: NEBULA_COUNT }, (_, i) => new Nebula(i));
+  }
+
+  // ---------- CAMERA UPDATE ----------
+  function updateCamera(dt) {
+    // Dampen rotational velocity
+    cam.yaw   += cam.rotVel.yaw * dt;
+    cam.pitch += cam.rotVel.pitch * dt;
+    cam.roll  += cam.rotVel.roll * dt;
+
+    // Clamp pitch
+    cam.pitch = Math.max(-1.45, Math.min(1.45, cam.pitch));
+
+    // Decay rotation velocity
+    cam.rotVel.yaw   *= 0.88;
+    cam.rotVel.pitch *= 0.88;
+    cam.rotVel.roll  *= 0.9;
+
+    // Apply linear velocity (in camera local space → world)
+    const forward = {
+      x: Math.sin(cam.yaw) * Math.cos(cam.pitch),
+      y: Math.sin(cam.pitch),
+      z: Math.cos(cam.yaw) * Math.cos(cam.pitch)
+    };
+    const right = {
+      x: Math.cos(cam.yaw),
+      y: 0,
+      z: -Math.sin(cam.yaw)
+    };
+    const up = {
+      x: -Math.sin(cam.yaw) * Math.sin(cam.pitch),
+      y: Math.cos(cam.pitch),
+      z: -Math.cos(cam.yaw) * Math.sin(cam.pitch)
+    };
+
+    cam.x += (forward.x * cam.vel.z + right.x * cam.vel.x + up.x * cam.vel.y) * dt;
+    cam.y += (forward.y * cam.vel.z + right.y * cam.vel.x + up.y * cam.vel.y) * dt;
+    cam.z += (forward.z * cam.vel.z + right.z * cam.vel.x + up.z * cam.vel.y) * dt;
+
+    // Soft damping of translation
+    cam.vel.x *= 0.92;
+    cam.vel.y *= 0.92;
+    cam.vel.z *= 0.94;
+
+    // Gentle auto drift so the scene never feels frozen
+    cam.yaw += 0.00015 * dt;
+  }
+
+  // ---------- DRAW ----------
+  function drawEye() {
+    // Project origin (0,0,0) as the storm eye
+    const p = project(0, 0, 0);
+    if (!p) return;
+
+    const eyeR = (70 + Math.sin(time * 0.55) * 10) * p.scale * 1.8;
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, eyeR * 2.6);
+    g.addColorStop(0, 'rgba(6, 3, 20, 0.9)');
+    g.addColorStop(0.3, 'rgba(22, 10, 55, 0.5)');
+    g.addColorStop(0.65, 'rgba(35, 18, 80, 0.15)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, eyeR * 2.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, eyeR * 0.9, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(110, 190, 255, ${0.07 + Math.sin(time * 1.1) * 0.035})`;
+    ctx.lineWidth = 2 * devicePixelRatio;
+    ctx.stroke();
+  }
+
+  function postProcess() {
+    const vg = ctx.createRadialGradient(CX, CY, Math.min(W, H) * 0.2, CX, CY, Math.max(W, H) * 0.75);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,10,0.5)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  function frame(now) {
+    const dt = Math.min((now - last) / 16.67, 2.8);
+    last = now;
+    time += dt * 0.016;
+
+    updateCamera(dt);
+
+    // Background
+    const bg = 0.5 + Math.sin(time * 0.25) * 0.5;
+    ctx.fillStyle = `rgb(${3 + bg * 2},${1 + bg},${10 + bg * 5})`;
+    ctx.fillRect(0, 0, W, H);
+
+    // Nebulas
+    for (const n of nebulas) {
+      n.update(dt);
+      n.draw(ctx);
+    }
+
+    // Soft wash
+    const washP = project(
+      Math.cos(time * 0.12) * 200,
+      Math.sin(time * 0.09) * 80,
+      Math.sin(time * 0.11) * 200
+    );
+    if (washP) {
+      const wash = ctx.createRadialGradient(washP.x, washP.y, 0, CX, CY, Math.max(W, H) * 0.65);
+      wash.addColorStop(0, 'rgba(50, 15, 110, 0.055)');
+      wash.addColorStop(0.5, 'rgba(15, 70, 140, 0.035)');
+      wash.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = wash;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // Stars (draw back-to-front roughly by sorting on z occasionally is expensive; skip for perf)
+    for (const s of stars) {
+      s.update(dt);
+      s.draw(ctx);
+    }
+
+    drawEye();
+    postProcess();
+
+    // HUD
+    hud.innerHTML =
+      `POS  ${cam.x.toFixed(0)}  ${cam.y.toFixed(0)}  ${cam.z.toFixed(0)}<br>` +
+      `YAW  ${(cam.yaw * 180 / Math.PI).toFixed(1)}°  ` +
+      `PITCH ${(cam.pitch * 180 / Math.PI).toFixed(1)}°  ` +
+      `ROLL ${(cam.roll * 180 / Math.PI).toFixed(1)}°`;
+
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- INPUT: MOUSE ----------
+  canvas.addEventListener('pointerdown', (e) => {
+    canvas.setPointerCapture(e.pointerId);
+    input.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (e.button === 2 || e.shiftKey || input.shift) {
+      input.rightDrag = true;
+    } else {
+      input.dragging = true;
+    }
+    input.lastX = e.clientX;
+    input.lastY = e.clientY;
+
+    // Two-finger start
+    if (input.pointers.size === 2) {
+      const pts = [...input.pointers.values()];
+      input.pinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    }
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    if (!input.pointers.has(e.pointerId)) return;
+    const prev = input.pointers.get(e.pointerId);
+    const dx = e.clientX - prev.x;
+    const dy = e.clientY - prev.y;
+    input.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (input.pointers.size === 2) {
+      // Pinch zoom + two-finger strafe
+      const pts = [...input.pointers.values()];
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      const delta = dist - input.pinchDist;
+      input.pinchDist = dist;
+
+      // Zoom (forward/back)
+      cam.vel.z += delta * 0.08;
+
+      // Average movement for strafe
+      const avgDx = (pts[0].x + pts[1].x) * 0.5 - (prev.x + e.clientX) * 0.5; // approximate
+      // Simpler: use the movement of this pointer scaled
+      cam.vel.x += dx * 0.04;
+      cam.vel.y -= dy * 0.04;
+      return;
+    }
+
+    if (input.rightDrag || input.shift) {
+      // Roll
+      cam.rotVel.roll += dx * 0.0018;
+      cam.rotVel.pitch += dy * 0.0008; // slight pitch while rolling
+    } else if (input.dragging) {
+      // Look (yaw / pitch)
+      cam.rotVel.yaw   += dx * 0.0022;
+      cam.rotVel.pitch += dy * 0.0020;
+    }
+
+    input.lastX = e.clientX;
+    input.lastY = e.clientY;
+  });
+
+  canvas.addEventListener('pointerup', (e) => {
+    input.pointers.delete(e.pointerId);
+    if (input.pointers.size === 0) {
+      input.dragging = false;
+      input.rightDrag = false;
+    }
+  });
+
+  canvas.addEventListener('pointercancel', (e) => {
+    input.pointers.delete(e.pointerId);
+    input.dragging = false;
+    input.rightDrag = false;
+  });
+
+  // Wheel zoom
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    cam.vel.z += -e.deltaY * 0.045;
+  }, { passive: false });
+
+  // Prevent context menu on right-click
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  // Keyboard helpers
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Shift') input.shift = true;
+    // Optional WASD / arrows for extra control
+    const speed = 2.8;
+    if (e.code === 'KeyW' || e.code === 'ArrowUp')    cam.vel.z += speed;
+    if (e.code === 'KeyS' || e.code === 'ArrowDown')  cam.vel.z -= speed;
+    if (e.code === 'KeyA' || e.code === 'ArrowLeft')  cam.vel.x -= speed;
+    if (e.code === 'KeyD' || e.code === 'ArrowRight') cam.vel.x += speed;
+    if (e.code === 'KeyQ') cam.vel.y += speed;
+    if (e.code === 'KeyE') cam.vel.y -= speed;
+    if (e.code === 'KeyR') cam.rotVel.roll -= 0.04;
+    if (e.code === 'KeyF') cam.rotVel.roll += 0.04;
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.key === 'Shift') input.shift = false;
+  });
+
+  window.addEventListener('resize', resize);
+
+  // Hide hint
+  setTimeout(() => {
+    document.getElementById('hint').classList.add('fade');
+  }, 6000);
+
+  // Boot
+  init();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
