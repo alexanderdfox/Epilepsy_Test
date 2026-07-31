@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Acoustic Multi-Tier Flow (11.67, 116.7, 1166.7 Hz)</title>
+	<style>
+		body, html {
+			margin: 0;
+			padding: 0;
+			width: 100%;
+			height: 100%;
+			overflow: hidden;
+			background-color: #050508;
+		}
+		canvas {
+			display: block;
+		}
+		#controls {
+			position: absolute;
+			top: 15px;
+			left: 15px;
+			color: #dcd6f7;
+			background: rgba(15, 14, 23, 0.85);
+			padding: 20px;
+			border-radius: 8px;
+			font-family: 'Courier New', Courier, monospace;
+			border: 1px solid rgba(130, 110, 255, 0.4);
+			box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+			line-height: 1.6;
+			max-width: 320px;
+		}
+		button {
+			background: #88c6ff;
+			color: #050508;
+			border: none;
+			padding: 10px 20px;
+			font-size: 14px;
+			font-weight: bold;
+			border-radius: 5px;
+			cursor: pointer;
+			margin-top: 12px;
+			width: 100%;
+			transition: 0.2s;
+		}
+		button:hover {
+			background: #a6b1e1;
+			box-shadow: 0 0 10px rgba(136, 198, 255, 0.5);
+		}
+	</style>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+</head>
+<body>
+
+	<div id="controls">
+		<h3 style="margin: 0 0 8px 0; font-size: 15px; color: #a6b1e1;">Acoustic Harmonic Tiers</h3>
+		<p style="margin: 0; font-size: 12px; color: #ffb366;">Tier 1: 11.67 Hz (Sub-bass / Alpha)</p>
+		<p style="margin: 0; font-size: 12px; color: #ff6666;">Tier 2: 116.7 Hz (Warm Bass Drone)</p>
+		<p style="margin: 0; font-size: 12px; color: #88c6ff;">Tier 3: 1166.7 Hz (Mid-range Overtone)</p>
+		<button id="toggleBtn" onclick="toggleAudioSystem()">Initialize Soundscape</button>
+	</div>
+
+	<canvas id="flowCanvas"></canvas>
+
+	<script>
+		const canvas = document.getElementById('flowCanvas');
+		const ctx = canvas.getContext('2d');
+
+		let width, height;
+		let time = 0;
+		const simplex = new SimplexNoise();
+
+		// Audio System States
+		let audioCtx = null;
+		let isRunning = false;
+		let masterGain = null;
+		let oscillators = [];
+
+		function resize() {
+			width = canvas.width = window.innerWidth;
+			height = canvas.height = window.innerHeight;
+		}
+		window.addEventListener('resize', resize);
+		resize();
+
+		function toggleAudioSystem() {
+			const btn = document.getElementById('toggleBtn');
+
+			if (!isRunning) {
+				audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+				const now = audioCtx.currentTime;
+
+				masterGain = audioCtx.createGain();
+				masterGain.gain.setValueAtTime(0, now);
+				masterGain.gain.linearRampToValueAtTime(0.25, now + 2); // Smooth master fade-in
+				masterGain.connect(audioCtx.destination);
+
+				const frequencies = [11.67, 116.7, 1166.7];
+
+				frequencies.forEach((freq, index) => {
+					// Laminar Core Tone
+					const osc = audioCtx.createOscillator();
+					osc.type = index === 0 ? 'sine' : (index === 1 ? 'triangle' : 'sine');
+					osc.frequency.setValueAtTime(freq, now);
+
+					// Oscillating Flow LFO
+					const lfo = audioCtx.createOscillator();
+					lfo.type = 'sine';
+					lfo.frequency.setValueAtTime(1.0 + index * 0.5, now);
+
+					const lfoGain = audioCtx.createGain();
+					lfoGain.gain.setValueAtTime(freq * 0.05, now); // Modulation depth
+
+					lfo.connect(lfoGain);
+					lfoGain.connect(osc.frequency);
+
+					let tierGain = audioCtx.createGain();
+					tierGain.gain.setValueAtTime(0.3 / (index + 1), now);
+
+					osc.connect(tierGain);
+					tierGain.connect(masterGain);
+
+					osc.start(now);
+					lfo.start(now);
+
+					oscillators.push({ osc, lfo });
+				});
+
+				isRunning = true;
+				btn.textContent = 'Halt Soundscape';
+				btn.style.background = '#ff6666';
+			} else {
+				const now = audioCtx.currentTime;
+				masterGain.gain.linearRampToValueAtTime(0, now + 0.5);
+
+				setTimeout(() => {
+					oscillators.forEach(item => {
+						item.osc.stop();
+						item.lfo.stop();
+					});
+					oscillators = [];
+					audioCtx.close();
+				}, 500);
+
+				isRunning = false;
+				btn.textContent = 'Initialize Soundscape';
+				btn.style.background = '#88c6ff';
+			}
+		}
+
+		function draw() {
+			time += 0.006;
+
+			ctx.fillStyle = 'rgba(5, 5, 8, 0.25)';
+			ctx.fillRect(0, 0, width, height);
+
+			ctx.globalCompositeOperation = 'screen';
+
+			const tiers = [
+				{ freq: 11.67,   hue: 35,  speed: 0.002, scale: 0.002, alpha: 0.35 }, 
+				{ freq: 116.7,   hue: 350, speed: 0.008, scale: 0.005, alpha: 0.25 }, 
+				{ freq: 1166.7,  hue: 220, speed: 0.02,  scale: 0.012, alpha: 0.15 }  
+			];
+
+			tiers.forEach((tier, index) => {
+				const lfo_pulse = Math.sin(2 * Math.PI * (tier.freq / 50) * time);
+				const pulse_amp = (lfo_pulse + 1) / 2;
+
+				// Turbulent Particles
+				const numParticles = 250;
+				for (let i = 0; i < numParticles; i++) {
+					const px = (Math.sin(i + time) * 0.5 + 0.5) * width;
+					const py = (Math.cos(i * 1.5 - time) * 0.5 + 0.5) * height;
+
+					const noiseVal = simplex.noise3D(px * tier.scale, py * tier.scale, time * tier.speed);
+					const pSize = (noiseVal + 1) * 1.5 + (pulse_amp * 2);
+					
+					const pHue = tier.hue + noiseVal * 20;
+					const pAlpha = (noiseVal + 1) / 2 * tier.alpha * pulse_amp;
+
+					ctx.fillStyle = `hsla(${pHue}, 90%, 60%, ${pAlpha})`;
+					ctx.beginPath();
+					ctx.arc(px + noiseVal * 20, py + noiseVal * 20, pSize, 0, Math.PI * 2);
+					ctx.fill();
+				}
+
+				// Laminar Waves
+				const numWaves = 4;
+				const waveAmplitude = 40 + (index * 15) + pulse_amp * 20;
+				const waveSpeed = tier.freq * 0.0005;
+
+				for (let i = 0; i < numWaves; i++) {
+					ctx.beginPath();
+					ctx.lineWidth = 1 + (index * 0.5);
+					ctx.strokeStyle = `hsla(${tier.hue}, 85%, 65%, ${tier.alpha * 0.6})`;
+
+					for (let x = 0; x < width; x += 20) {
+						const y = height / 2 + 
+								  ((i - numWaves / 2) * 50) + 
+								  Math.sin(x * (tier.scale * 2) + time * waveSpeed) * waveAmplitude;
+
+						if (x === 0) ctx.moveTo(x, y);
+						else ctx.lineTo(x, y);
+					}
+					ctx.stroke();
+				}
+			});
+
+			requestAnimationFrame(draw);
+		}
+
+		draw();
+	</script>
+</body>
+</html>
