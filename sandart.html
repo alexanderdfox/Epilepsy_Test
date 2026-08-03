@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0a0a12">
+  <title>Sand Art Window</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+      user-select: none;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0a0a12;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    #canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #0a0a12;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    #ui {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      background: linear-gradient(transparent, rgba(0,0,0,0.75));
+      opacity: 1;
+      transition: opacity 0.4s ease;
+      z-index: 10;
+      pointer-events: none;
+    }
+    #ui.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #ui button {
+      pointer-events: auto;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.25);
+      color: #fff;
+      padding: 12px 18px;
+      border-radius: 50px;
+      font-size: 15px;
+      font-weight: 500;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      min-width: 70px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    #ui button:active {
+      transform: scale(0.94);
+      background: rgba(255,255,255,0.25);
+    }
+    #ui button.active {
+      background: rgba(100,180,255,0.35);
+      border-color: rgba(100,180,255,0.6);
+    }
+    #hint {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,0.7);
+      font-size: 14px;
+      text-align: center;
+      background: rgba(0,0,0,0.45);
+      padding: 10px 18px;
+      border-radius: 20px;
+      backdrop-filter: blur(8px);
+      z-index: 10;
+      pointer-events: none;
+      transition: opacity 0.6s ease;
+      max-width: 90%;
+      line-height: 1.4;
+    }
+    #hint.fade { opacity: 0; }
+    #tilt-status {
+      position: fixed;
+      top: 20px;
+      right: 16px;
+      color: rgba(255,255,255,0.5);
+      font-size: 12px;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .icon { font-size: 18px; line-height: 1; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="hint">Tilt your device • Drag to dig/pour • Use buttons below</div>
+  <div id="tilt-status"></div>
+  <div id="ui">
+    <button id="btn-flip" title="Flip gravity"><span class="icon">⇅</span> Flip</button>
+    <button id="btn-mix" title="Shake & mix the sand"><span class="icon">🌪️</span> Mix</button>
+    <button id="btn-tilt" title="Toggle device tilt"><span class="icon">📱</span> Tilt</button>
+    <button id="btn-palette" title="Change colors"><span class="icon">🎨</span> Colors</button>
+    <button id="btn-reset" title="Reset scene"><span class="icon">↺</span> Reset</button>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const hint = document.getElementById('hint');
+  const tiltStatus = document.getElementById('tilt-status');
+  const ui = document.getElementById('ui');
+
+  let CELL = 3;
+  let cols = 0, rows = 0;
+  let grid = null;
+
+  let gravityX = 0;
+  let gravityY = 1;
+  let tiltEnabled = false;
+  let orientationSupported = false;
+
+  const palettes = [
+    [[40,55,80],[70,120,160],[100,160,120],[180,170,100],[200,140,80],[160,90,60]],
+    [[30,30,50],[80,40,70],[160,60,50],[220,120,60],[240,180,80],[250,220,140]],
+    [[10,30,50],[20,60,100],[40,110,150],[80,160,180],[140,200,200],[200,230,220]],
+    [[50,40,30],[100,70,40],[160,110,50],[200,150,70],[220,180,100],[240,210,140]],
+    [[20,20,40],[40,60,100],[50,120,100],[80,180,140],[140,100,180],[200,80,140]],
+  ];
+  let paletteIndex = 0;
+  let colors = palettes[0];
+
+  let isPointerDown = false;
+  let brushRadius = 6;
+  let uiTimeout = null;
+
+  // ── Resize & init ──────────────────────────────────────────────
+  function resize() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const area = w * h;
+    CELL = area > 900000 ? 4 : (area > 400000 ? 3 : 2);
+
+    const newCols = Math.max(1, Math.floor(w / CELL));
+    const newRows = Math.max(1, Math.floor(h / CELL));
+
+    if (newCols !== cols || newRows !== rows) {
+      cols = newCols;
+      rows = newRows;
+      canvas.width = cols;
+      canvas.height = rows;
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+      ctx.imageSmoothingEnabled = false;
+      initSand();
+    }
+  }
+
+  function initSand() {
+    grid = new Uint8Array(cols * rows);
+    const fillH = Math.floor(rows * 0.55);
+    const bandH = Math.max(1, Math.floor(fillH / colors.length));
+    const startY = rows - fillH;
+
+    for (let y = startY; y < rows; y++) {
+      const band = Math.min(colors.length - 1, Math.floor((y - startY) / bandH));
+      const colorId = band + 1;
+      for (let x = 0; x < cols; x++) {
+        const noise = Math.sin(x * 0.08 + band * 2) * 3 + Math.random() * 2;
+        if (y > startY + noise) grid[y * cols + x] = colorId;
+      }
+    }
+
+    // Soft surface dunes
+    for (let x = 0; x < cols; x++) {
+      const peak = Math.floor(Math.sin(x * 0.05) * 4 + Math.sin(x * 0.13) * 2);
+      for (let dy = 0; dy < 6; dy++) {
+        const y = rows - fillH - dy + peak;
+        if (y >= 0 && y < rows && grid[y * cols + x] === 0 && Math.random() > 0.4) {
+          grid[y * cols + x] = 1 + Math.floor(Math.random() * 2);
+        }
+      }
+    }
+  }
+
+  // ── Gravity helpers ────────────────────────────────────────────
+  function updateGravityFromTilt(beta, gamma) {
+    const radB = beta * Math.PI / 180;
+    const radG = gamma * Math.PI / 180;
+    gravityX = Math.sin(radG);
+    gravityY = Math.sin(radB);
+    const len = Math.hypot(gravityX, gravityY) || 1;
+    gravityX /= len;
+    gravityY /= len;
+    if (Math.abs(beta) < 8 && Math.abs(gamma) < 8) {
+      gravityX = 0;
+      gravityY = 1;
+    }
+  }
+
+  function flipGravity() {
+    gravityX = -gravityX;
+    gravityY = -gravityY;
+    if (Math.abs(gravityX) < 0.1) gravityX = (Math.random() - 0.5) * 0.3;
+    if (Math.abs(gravityY) < 0.1) gravityY = (Math.random() - 0.5) * 0.3;
+  }
+
+  function mixSand() {
+    const temp = new Uint8Array(grid);
+    const strength = 5;
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const idx = y * cols + x;
+        const val = grid[idx];
+        if (val === 0) continue;
+        if (Math.random() < 0.32) {
+          const nx = x + Math.floor((Math.random() - 0.5) * strength * 2);
+          const ny = y + Math.floor((Math.random() - 0.5) * strength * 2);
+          if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && temp[ny * cols + nx] === 0) {
+            temp[ny * cols + nx] = val;
+            temp[idx] = 0;
+          }
+        }
+      }
+    }
+    grid = temp;
+  }
+
+  // ── Corrected update (the important fix) ───────────────────────
+  function updateSand() {
+    const gx = gravityX;
+    const gy = gravityY;
+
+    // Scan FROM the side particles fall TOWARDS
+    // Down  → bottom-to-top
+    // Up    → top-to-bottom
+    // Right → right-to-left
+    // Left  → left-to-right
+    const stepY = gy >= 0 ? -1 : 1;
+    const startY = gy >= 0 ? rows - 1 : 0;
+    const endY   = gy >= 0 ? -1 : rows;
+
+    const stepX = gx >= 0 ? -1 : 1;
+    const startX = gx >= 0 ? cols - 1 : 0;
+    const endX   = gx >= 0 ? -1 : cols;
+
+    const next = new Uint8Array(grid);
+
+    for (let y = startY; y !== endY; y += stepY) {
+      for (let x = startX; x !== endX; x += stepX) {
+        const idx = y * cols + x;
+        const val = grid[idx];
+        if (val === 0) continue;
+
+        let dx = 0, dy = 0;
+        if (Math.abs(gy) >= Math.abs(gx)) {
+          dy = gy > 0 ? 1 : -1;
+        } else {
+          dx = gx > 0 ? 1 : -1;
+        }
+
+        const nx = x + dx;
+        const ny = y + dy;
+
+        // Primary direction
+        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && next[ny * cols + nx] === 0) {
+          next[ny * cols + nx] = val;
+          next[idx] = 0;
+          continue;
+        }
+
+        // Diagonals / sides
+        const side1 = Math.random() < 0.5 ? 1 : -1;
+        const side2 = -side1;
+        const candidates = dy !== 0
+          ? [[x + side1, y + dy], [x + side2, y + dy], [x + side1, y], [x + side2, y]]
+          : [[x + dx, y + side1], [x + dx, y + side2], [x, y + side1], [x, y + side2]];
+
+        for (const [cx, cy] of candidates) {
+          if (cx >= 0 && cx < cols && cy >= 0 && cy < rows && next[cy * cols + cx] === 0) {
+            next[cy * cols + cx] = val;
+            next[idx] = 0;
+            break;
+          }
+        }
+      }
+    }
+    grid = next;
+  }
+
+  // ── Drawing (low-res canvas + CSS upscale) ─────────────────────
+  function draw() {
+    const imageData = ctx.createImageData(cols, rows);
+    const data = imageData.data;
+
+    for (let i = 0; i < grid.length; i++) {
+      const val = grid[i];
+      const x = i % cols;
+      const y = (i / cols) | 0;
+      let r = 10, g = 10, b = 18;
+
+      if (val > 0) {
+        const c = colors[(val - 1) % colors.length];
+        let v = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+        v = v - Math.floor(v);               // always positive [0,1)
+        const shade = 0.80 + v * 0.40;
+        r = Math.min(255, (c[0] * shade) | 0);
+        g = Math.min(255, (c[1] * shade) | 0);
+        b = Math.min(255, (c[2] * shade) | 0);
+      }
+
+      const o = i * 4;
+      data[o] = r; data[o + 1] = g; data[o + 2] = b; data[o + 3] = 255;
+    }
+    ctx.putImageData(imageData, 0, 0);
+  }
+
+  // ── Brush ──────────────────────────────────────────────────────
+  function handlePointer(px, py) {
+    const gx = Math.floor(px);
+    const gy = Math.floor(py);
+    const r = brushRadius;
+    const pour = gy > rows * 0.68;
+
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy > r * r) continue;
+        const nx = gx + dx;
+        const ny = gy + dy;
+        if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+
+        const idx = ny * cols + nx;
+        if (pour) {
+          if (grid[idx] === 0 && Math.random() > 0.35) {
+            grid[idx] = 1 + Math.floor(Math.random() * colors.length);
+          }
+        } else if (Math.random() > 0.25) {
+          grid[idx] = 0;
+        }
+      }
+    }
+  }
+
+  function showUITemporarily() {
+    ui.classList.remove('hidden');
+    clearTimeout(uiTimeout);
+    uiTimeout = setTimeout(() => {
+      if (!isPointerDown) ui.classList.add('hidden');
+    }, 3500);
+  }
+
+  function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches?.length ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches?.length ? e.touches[0].clientY : e.clientY;
+    return {
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top)  * (canvas.height / rect.height)
+    };
+  }
+
+  // ── Events ─────────────────────────────────────────────────────
+  canvas.addEventListener('pointerdown', e => {
+    isPointerDown = true;
+    const p = getPos(e);
+    handlePointer(p.x, p.y);
+    showUITemporarily();
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!isPointerDown) return;
+    const p = getPos(e);
+    handlePointer(p.x, p.y);
+  });
+  canvas.addEventListener('pointerup', () => {
+    isPointerDown = false;
+    showUITemporarily();
+  });
+  canvas.addEventListener('pointercancel', () => { isPointerDown = false; });
+
+  document.getElementById('btn-flip').addEventListener('click', () => {
+    flipGravity();
+    showUITemporarily();
+  });
+
+  document.getElementById('btn-mix').addEventListener('click', () => {
+    mixSand();
+    gravityX += (Math.random() - 0.5) * 0.8;
+    gravityY += (Math.random() - 0.5) * 0.8;
+    const len = Math.hypot(gravityX, gravityY) || 1;
+    gravityX /= len;
+    gravityY /= len;
+    showUITemporarily();
+  });
+
+  document.getElementById('btn-tilt').addEventListener('click', async () => {
+    if (!orientationSupported) {
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+          const perm = await DeviceOrientationEvent.requestPermission();
+          if (perm === 'granted') {
+            orientationSupported = true;
+            tiltEnabled = true;
+            document.getElementById('btn-tilt').classList.add('active');
+            tiltStatus.textContent = 'Tilt: ON';
+          }
+        } catch {
+          tiltStatus.textContent = 'Tilt denied';
+        }
+      } else if (window.DeviceOrientationEvent) {
+        orientationSupported = true;
+        tiltEnabled = true;
+        document.getElementById('btn-tilt').classList.add('active');
+        tiltStatus.textContent = 'Tilt: ON';
+      } else {
+        tiltStatus.textContent = 'Tilt not supported';
+      }
+    } else {
+      tiltEnabled = !tiltEnabled;
+      document.getElementById('btn-tilt').classList.toggle('active', tiltEnabled);
+      tiltStatus.textContent = tiltEnabled ? 'Tilt: ON' : 'Tilt: OFF';
+      if (!tiltEnabled) { gravityX = 0; gravityY = 1; }
+    }
+    showUITemporarily();
+  });
+
+  document.getElementById('btn-palette').addEventListener('click', () => {
+    paletteIndex = (paletteIndex + 1) % palettes.length;
+    colors = palettes[paletteIndex];
+    for (let i = 0; i < grid.length; i++) {
+      if (grid[i] > 0) grid[i] = 1 + ((grid[i] - 1) % colors.length);
+    }
+    showUITemporarily();
+  });
+
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    gravityX = 0;
+    gravityY = 1;
+    initSand();
+    showUITemporarily();
+  });
+
+  window.addEventListener('deviceorientation', e => {
+    if (!tiltEnabled || e.beta == null || e.gamma == null) return;
+    updateGravityFromTilt(e.beta, e.gamma);
+  });
+
+  window.addEventListener('keydown', e => {
+    if (e.key === 'f' || e.key === 'F') flipGravity();
+    if (e.key === 'm' || e.key === 'M') {
+      mixSand();
+      gravityX += (Math.random() - 0.5) * 0.8;
+      gravityY += (Math.random() - 0.5) * 0.8;
+      const len = Math.hypot(gravityX, gravityY) || 1;
+      gravityX /= len; gravityY /= len;
+    }
+    if (e.key === 'r' || e.key === 'R') { gravityX = 0; gravityY = 1; initSand(); }
+    if (e.key === 'c' || e.key === 'C' || e.key === 'p' || e.key === 'P') {
+      paletteIndex = (paletteIndex + 1) % palettes.length;
+      colors = palettes[paletteIndex];
+      for (let i = 0; i < grid.length; i++) {
+        if (grid[i] > 0) grid[i] = 1 + ((grid[i] - 1) % colors.length);
+      }
+    }
+    if (e.key === 'ArrowUp')    { gravityX = 0; gravityY = -1; }
+    if (e.key === 'ArrowDown')  { gravityX = 0; gravityY = 1; }
+    if (e.key === 'ArrowLeft')  { gravityX = -1; gravityY = 0; }
+    if (e.key === 'ArrowRight') { gravityX = 1; gravityY = 0; }
+    showUITemporarily();
+  });
+
+  document.body.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+
+  setTimeout(() => hint.classList.add('fade'), 5000);
+  showUITemporarily();
+
+  let resizeTimeout;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(resize, 120);
+  });
+
+  // ── Main loop ──────────────────────────────────────────────────
+  function loop() {
+    updateSand();
+    if (cols * rows < 90000) updateSand(); // extra pass on smaller grids
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  resize();
+  requestAnimationFrame(loop);
+
+  if (window.DeviceOrientationEvent &&
+      typeof DeviceOrientationEvent.requestPermission !== 'function') {
+    orientationSupported = true;
+  }
+})();
+</script>
+</body>
+</html>
