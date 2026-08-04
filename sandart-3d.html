@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0a0a12">
+  <title>3D Sand Art</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+      user-select: none;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0a0a12;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    #canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #ui {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      background: linear-gradient(transparent, rgba(0,0,0,0.8));
+      opacity: 1;
+      transition: opacity 0.4s ease;
+      z-index: 10;
+      pointer-events: none;
+    }
+    #ui.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #ui button {
+      pointer-events: auto;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.25);
+      color: #fff;
+      padding: 12px 18px;
+      border-radius: 50px;
+      font-size: 15px;
+      font-weight: 500;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      min-width: 70px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    #ui button:active {
+      transform: scale(0.94);
+      background: rgba(255,255,255,0.25);
+    }
+    #ui button.active {
+      background: rgba(100,180,255,0.35);
+      border-color: rgba(100,180,255,0.6);
+    }
+    #hint {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,0.7);
+      font-size: 14px;
+      text-align: center;
+      background: rgba(0,0,0,0.45);
+      padding: 10px 18px;
+      border-radius: 20px;
+      backdrop-filter: blur(8px);
+      z-index: 10;
+      pointer-events: none;
+      transition: opacity 0.6s ease;
+      max-width: 90%;
+      line-height: 1.4;
+    }
+    #hint.fade { opacity: 0; }
+    #tilt-status {
+      position: fixed;
+      top: 20px;
+      right: 16px;
+      color: rgba(255,255,255,0.5);
+      font-size: 12px;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .icon { font-size: 18px; line-height: 1; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="hint">Drag to dig / pour • Tilt device • Use buttons</div>
+  <div id="tilt-status"></div>
+  <div id="ui">
+    <button id="btn-flip" title="Flip gravity"><span class="icon">⇅</span> Flip</button>
+    <button id="btn-mix" title="Shake & mix the sand"><span class="icon">🌪️</span> Mix</button>
+    <button id="btn-tilt" title="Toggle device tilt"><span class="icon">📱</span> Tilt</button>
+    <button id="btn-palette" title="Change colors"><span class="icon">🎨</span> Colors</button>
+    <button id="btn-reset" title="Reset scene"><span class="icon">↺</span> Reset</button>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+  // ── Config ──────────────────────────────────────────────────────
+  const BOX = { w: 8, h: 10, d: 8 };          // container size
+  const MAX_PARTICLES = 3200;
+  const GRAIN_SIZE = 0.12;
+  const GRAVITY_STRENGTH = 0.018;
+  const DAMPING = 0.985;
+  const REST_THRESHOLD = 0.012;
+  const WALL_BOUNCE = 0.15;
+  const FLOOR_FRICTION = 0.72;
+
+  const palettes = [
+    [[40,55,80],[70,120,160],[100,160,120],[180,170,100],[200,140,80],[160,90,60]],
+    [[30,30,50],[80,40,70],[160,60,50],[220,120,60],[240,180,80],[250,220,140]],
+    [[10,30,50],[20,60,100],[40,110,150],[80,160,180],[140,200,200],[200,230,220]],
+    [[50,40,30],[100,70,40],[160,110,50],[200,150,70],[220,180,100],[240,210,140]],
+    [[20,20,40],[40,60,100],[50,120,100],[80,180,140],[140,100,180],[200,80,140]],
+  ];
+  let paletteIndex = 0;
+  let colors = palettes[0];
+
+  // ── DOM ─────────────────────────────────────────────────────────
+  const canvas = document.getElementById('canvas');
+  const hint = document.getElementById('hint');
+  const tiltStatus = document.getElementById('tilt-status');
+  const ui = document.getElementById('ui');
+
+  // ── Three.js setup ──────────────────────────────────────────────
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    powerPreference: 'high-performance'
+  });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x0a0a12);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x0a0a12, 0.035);
+
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.set(0, 6, 16);
+  camera.lookAt(0, 0, 0);
+
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.minDistance = 8;
+  controls.maxDistance = 28;
+  controls.maxPolarAngle = Math.PI * 0.85;
+  controls.target.set(0, 0, 0);
+  // Disable orbit on single touch so dig/pour works; use two-finger or mouse
+  controls.touches = { ONE: THREE.TOUCH.NONE, TWO: THREE.TOUCH.DOLLY_PAN };
+
+  // Lights
+  const ambient = new THREE.AmbientLight(0x404060, 0.55);
+  scene.add(ambient);
+
+  const keyLight = new THREE.DirectionalLight(0xfff0e0, 1.1);
+  keyLight.position.set(6, 14, 8);
+  keyLight.castShadow = true;
+  keyLight.shadow.mapSize.set(1024, 1024);
+  keyLight.shadow.camera.near = 1;
+  keyLight.shadow.camera.far = 40;
+  keyLight.shadow.camera.left = -10;
+  keyLight.shadow.camera.right = 10;
+  keyLight.shadow.camera.top = 10;
+  keyLight.shadow.camera.bottom = -10;
+  scene.add(keyLight);
+
+  const fill = new THREE.DirectionalLight(0x6080ff, 0.35);
+  fill.position.set(-5, 4, -6);
+  scene.add(fill);
+
+  // Glass container (edges only for clarity)
+  const boxGeo = new THREE.BoxGeometry(BOX.w, BOX.h, BOX.d);
+  const edges = new THREE.EdgesGeometry(boxGeo);
+  const edgeMat = new THREE.LineBasicMaterial({ color: 0x3a4a6a, transparent: true, opacity: 0.55 });
+  const boxLines = new THREE.LineSegments(edges, edgeMat);
+  scene.add(boxLines);
+
+  // Subtle floor plane inside box
+  const floorGeo = new THREE.PlaneGeometry(BOX.w - 0.05, BOX.d - 0.05);
+  const floorMat = new THREE.MeshStandardMaterial({
+    color: 0x12121a,
+    roughness: 0.9,
+    metalness: 0.05
+  });
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = -BOX.h / 2 + 0.01;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  // ── Particle system (InstancedMesh) ─────────────────────────────
+  const geometry = new THREE.BoxGeometry(GRAIN_SIZE, GRAIN_SIZE, GRAIN_SIZE);
+  const material = new THREE.MeshStandardMaterial({
+    roughness: 0.85,
+    metalness: 0.05,
+    flatShading: true
+  });
+
+  const mesh = new THREE.InstancedMesh(geometry, material, MAX_PARTICLES);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  scene.add(mesh);
+
+  // Per-instance color
+  const colorAttr = new THREE.InstancedBufferAttribute(new Float32Array(MAX_PARTICLES * 3), 3);
+  mesh.instanceColor = colorAttr;
+
+  // Physics state
+  const positions = new Float32Array(MAX_PARTICLES * 3);
+  const velocities = new Float32Array(MAX_PARTICLES * 3);
+  const colorIds = new Uint8Array(MAX_PARTICLES);
+  let particleCount = 0;
+  let gravity = new THREE.Vector3(0, -1, 0);
+  let tiltEnabled = false;
+  let orientationSupported = false;
+
+  const dummy = new THREE.Object3D();
+  const tmpColor = new THREE.Color();
+  const halfW = BOX.w / 2 - GRAIN_SIZE;
+  const halfH = BOX.h / 2 - GRAIN_SIZE;
+  const halfD = BOX.d / 2 - GRAIN_SIZE;
+
+  // ── Init sand pile ──────────────────────────────────────────────
+  function initSand() {
+    particleCount = 0;
+    const layers = 7;
+    const baseY = -halfH + 0.3;
+    const spacing = GRAIN_SIZE * 1.05;
+
+    for (let layer = 0; layer < layers; layer++) {
+      const y = baseY + layer * spacing * 0.95;
+      const radius = 3.2 - layer * 0.28;
+      const countInLayer = Math.floor(180 - layer * 12);
+      for (let i = 0; i < countInLayer && particleCount < MAX_PARTICLES; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.sqrt(Math.random()) * radius;
+        const x = Math.cos(a) * r + (Math.random() - 0.5) * 0.15;
+        const z = Math.sin(a) * r + (Math.random() - 0.5) * 0.15;
+
+        const idx = particleCount * 3;
+        positions[idx]     = x;
+        positions[idx + 1] = y + (Math.random() - 0.5) * 0.08;
+        positions[idx + 2] = z;
+        velocities[idx] = velocities[idx + 1] = velocities[idx + 2] = 0;
+
+        // Color by height band
+        const band = Math.min(colors.length - 1, Math.floor(layer / layers * colors.length));
+        colorIds[particleCount] = band;
+        setInstanceColor(particleCount, band);
+        particleCount++;
+      }
+    }
+    // Fill remaining with a denser lower layer
+    while (particleCount < Math.min(MAX_PARTICLES, 2400)) {
+      const idx = particleCount * 3;
+      positions[idx]     = (Math.random() - 0.5) * 5.5;
+      positions[idx + 1] = baseY + Math.random() * 1.8;
+      positions[idx + 2] = (Math.random() - 0.5) * 5.5;
+      velocities[idx] = velocities[idx + 1] = velocities[idx + 2] = 0;
+      const band = Math.floor(Math.random() * Math.min(3, colors.length));
+      colorIds[particleCount] = band;
+      setInstanceColor(particleCount, band);
+      particleCount++;
+    }
+    mesh.count = particleCount;
+    updateMatrices();
+  }
+
+  function setInstanceColor(i, band) {
+    const c = colors[band % colors.length];
+    const shade = 0.82 + Math.random() * 0.35;
+    tmpColor.setRGB(
+      Math.min(1, (c[0] / 255) * shade),
+      Math.min(1, (c[1] / 255) * shade),
+      Math.min(1, (c[2] / 255) * shade)
+    );
+    mesh.setColorAt(i, tmpColor);
+  }
+
+  function updateMatrices() {
+    for (let i = 0; i < particleCount; i++) {
+      const idx = i * 3;
+      dummy.position.set(positions[idx], positions[idx + 1], positions[idx + 2]);
+      dummy.rotation.set(
+        (i * 0.7) % Math.PI,
+        (i * 1.3) % Math.PI,
+        (i * 0.5) % Math.PI
+      );
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }
+
+  // ── Physics ─────────────────────────────────────────────────────
+  function updatePhysics() {
+    const gx = gravity.x * GRAVITY_STRENGTH;
+    const gy = gravity.y * GRAVITY_STRENGTH;
+    const gz = gravity.z * GRAVITY_STRENGTH;
+
+    for (let i = 0; i < particleCount; i++) {
+      const idx = i * 3;
+      let vx = velocities[idx];
+      let vy = velocities[idx + 1];
+      let vz = velocities[idx + 2];
+
+      // Gravity
+      vx += gx;
+      vy += gy;
+      vz += gz;
+
+      // Integrate
+      let x = positions[idx]     + vx;
+      let y = positions[idx + 1] + vy;
+      let z = positions[idx + 2] + vz;
+
+      // Walls
+      if (x < -halfW) { x = -halfW; vx *= -WALL_BOUNCE; }
+      else if (x > halfW) { x = halfW; vx *= -WALL_BOUNCE; }
+      if (z < -halfD) { z = -halfD; vz *= -WALL_BOUNCE; }
+      else if (z > halfD) { z = halfD; vz *= -WALL_BOUNCE; }
+      if (y < -halfH) {
+        y = -halfH;
+        vy *= -WALL_BOUNCE * 0.4;
+        vx *= FLOOR_FRICTION;
+        vz *= FLOOR_FRICTION;
+        if (Math.abs(vy) < REST_THRESHOLD) vy = 0;
+      } else if (y > halfH) {
+        y = halfH;
+        vy *= -WALL_BOUNCE;
+      }
+
+      // Light damping
+      vx *= DAMPING;
+      vy *= DAMPING;
+      vz *= DAMPING;
+
+      // Rest when nearly stopped near floor
+      const speed = Math.hypot(vx, vy, vz);
+      if (speed < REST_THRESHOLD && y < -halfH + 1.5) {
+        vx *= 0.5;
+        vz *= 0.5;
+        if (speed < REST_THRESHOLD * 0.4) {
+          vx = 0; vy = 0; vz = 0;
+        }
+      }
+
+      positions[idx]     = x;
+      positions[idx + 1] = y;
+      positions[idx + 2] = z;
+      velocities[idx]     = vx;
+      velocities[idx + 1] = vy;
+      velocities[idx + 2] = vz;
+    }
+
+    // Simple neighbor push (cheap stacking / separation) – every few frames
+    if ((frameCount & 1) === 0) {
+      separateParticles();
+    }
+
+    updateMatrices();
+  }
+
+  // Spatial hash for cheap separation
+  const cellSize = GRAIN_SIZE * 2.2;
+  const hash = new Map();
+
+  function separateParticles() {
+    hash.clear();
+    for (let i = 0; i < particleCount; i++) {
+      const idx = i * 3;
+      const cx = Math.floor(positions[idx] / cellSize);
+      const cy = Math.floor(positions[idx + 1] / cellSize);
+      const cz = Math.floor(positions[idx + 2] / cellSize);
+      const key = cx + ',' + cy + ',' + cz;
+      if (!hash.has(key)) hash.set(key, []);
+      hash.get(key).push(i);
+    }
+
+    const minDist = GRAIN_SIZE * 0.95;
+    const minDistSq = minDist * minDist;
+
+    for (const list of hash.values()) {
+      for (let a = 0; a < list.length; a++) {
+        const i = list[a];
+        const idx = i * 3;
+        for (let b = a + 1; b < list.length; b++) {
+          const j = list[b];
+          const jdx = j * 3;
+          let dx = positions[idx] - positions[jdx];
+          let dy = positions[idx + 1] - positions[jdx + 1];
+          let dz = positions[idx + 2] - positions[jdx + 2];
+          const distSq = dx * dx + dy * dy + dz * dz;
+          if (distSq < minDistSq && distSq > 1e-8) {
+            const dist = Math.sqrt(distSq);
+            const push = (minDist - dist) * 0.35;
+            const inv = 1 / dist;
+            dx *= inv * push;
+            dy *= inv * push;
+            dz *= inv * push;
+            positions[idx]     += dx;
+            positions[idx + 1] += dy;
+            positions[idx + 2] += dz;
+            positions[jdx]     -= dx;
+            positions[jdx + 1] -= dy;
+            positions[jdx + 2] -= dz;
+            // damp relative velocity a bit
+            velocities[idx]     *= 0.92;
+            velocities[idx + 1] *= 0.92;
+            velocities[idx + 2] *= 0.92;
+            velocities[jdx]     *= 0.92;
+            velocities[jdx + 1] *= 0.92;
+            velocities[jdx + 2] *= 0.92;
+          }
+        }
+      }
+    }
+  }
+
+  // ── Interaction: dig / pour ─────────────────────────────────────
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  let isPointerDown = false;
+  let pourMode = false;
+  let uiTimeout = null;
+
+  function getNDC(e) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches?.length ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches?.length ? e.touches[0].clientY : e.clientY;
+    pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+  }
+
+  function handlePointer(e) {
+    getNDC(e);
+    raycaster.setFromCamera(pointer, camera);
+
+    // Project a point along the ray at a fixed distance / plane near center
+    const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1).applyQuaternion(camera.quaternion), 0);
+    // Better: intersect with a box volume approx
+    const hit = new THREE.Vector3();
+    // Use a simple forward projection into the box
+    const dir = raycaster.ray.direction.clone();
+    const origin = raycaster.ray.origin.clone();
+    // Find intersection with the volume roughly
+    let t = 12;
+    hit.copy(origin).addScaledVector(dir, t);
+    // Clamp into box
+    hit.x = THREE.MathUtils.clamp(hit.x, -halfW + 0.3, halfW - 0.3);
+    hit.y = THREE.MathUtils.clamp(hit.y, -halfH + 0.3, halfH - 0.3);
+    hit.z = THREE.MathUtils.clamp(hit.z, -halfD + 0.3, halfD - 0.3);
+
+    // Decide pour vs dig based on height of interaction relative to camera view
+    // Higher on screen → pour, lower → dig (like original)
+    pourMode = pointer.y < -0.15;
+
+    const radius = 0.55;
+    const radiusSq = radius * radius;
+
+    if (pourMode) {
+      // Add particles
+      const toAdd = 8;
+      for (let n = 0; n < toAdd && particleCount < MAX_PARTICLES; n++) {
+        const idx = particleCount * 3;
+        positions[idx]     = hit.x + (Math.random() - 0.5) * radius;
+        positions[idx + 1] = hit.y + (Math.random() - 0.5) * radius * 0.6;
+        positions[idx + 2] = hit.z + (Math.random() - 0.5) * radius;
+        velocities[idx]     = (Math.random() - 0.5) * 0.04;
+        velocities[idx + 1] = -0.02 - Math.random() * 0.03;
+        velocities[idx + 2] = (Math.random() - 0.5) * 0.04;
+        const band = Math.floor(Math.random() * colors.length);
+        colorIds[particleCount] = band;
+        setInstanceColor(particleCount, band);
+        particleCount++;
+      }
+      mesh.count = particleCount;
+    } else {
+      // Dig – remove nearby particles (swap-remove)
+      for (let i = particleCount - 1; i >= 0; i--) {
+        const idx = i * 3;
+        const dx = positions[idx] - hit.x;
+        const dy = positions[idx + 1] - hit.y;
+        const dz = positions[idx + 2] - hit.z;
+        if (dx * dx + dy * dy + dz * dz < radiusSq && Math.random() > 0.35) {
+          // Swap with last
+          const last = (particleCount - 1) * 3;
+          positions[idx]     = positions[last];
+          positions[idx + 1] = positions[last + 1];
+          positions[idx + 2] = positions[last + 2];
+          velocities[idx]     = velocities[last];
+          velocities[idx + 1] = velocities[last + 1];
+          velocities[idx + 2] = velocities[last + 2];
+          colorIds[i] = colorIds[particleCount - 1];
+          setInstanceColor(i, colorIds[i]);
+          particleCount--;
+        }
+      }
+      mesh.count = particleCount;
+    }
+  }
+
+  function showUITemporarily() {
+    ui.classList.remove('hidden');
+    clearTimeout(uiTimeout);
+    uiTimeout = setTimeout(() => {
+      if (!isPointerDown) ui.classList.add('hidden');
+    }, 3500);
+  }
+
+  // ── Gravity helpers ─────────────────────────────────────────────
+  function updateGravityFromTilt(beta, gamma) {
+    const radB = beta * Math.PI / 180;
+    const radG = gamma * Math.PI / 180;
+    gravity.set(Math.sin(radG), -Math.cos(radB) * Math.cos(radG), Math.sin(radB) * 0.6);
+    if (gravity.lengthSq() < 1e-6) gravity.set(0, -1, 0);
+    else gravity.normalize();
+    // Dead zone
+    if (Math.abs(beta) < 8 && Math.abs(gamma) < 8) {
+      gravity.set(0, -1, 0);
+    }
+  }
+
+  function flipGravity() {
+    gravity.negate();
+    if (Math.abs(gravity.x) < 0.1) gravity.x = (Math.random() - 0.5) * 0.4;
+    if (Math.abs(gravity.z) < 0.1) gravity.z = (Math.random() - 0.5) * 0.4;
+    gravity.normalize();
+  }
+
+  function mixSand() {
+    for (let i = 0; i < particleCount; i++) {
+      const idx = i * 3;
+      velocities[idx]     += (Math.random() - 0.5) * 0.35;
+      velocities[idx + 1] += (Math.random() - 0.5) * 0.35;
+      velocities[idx + 2] += (Math.random() - 0.5) * 0.35;
+    }
+    gravity.x += (Math.random() - 0.5) * 0.9;
+    gravity.y += (Math.random() - 0.5) * 0.9;
+    gravity.z += (Math.random() - 0.5) * 0.9;
+    gravity.normalize();
+  }
+
+  // ── Events ──────────────────────────────────────────────────────
+  canvas.addEventListener('pointerdown', e => {
+    isPointerDown = true;
+    handlePointer(e);
+    showUITemporarily();
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!isPointerDown) return;
+    handlePointer(e);
+  });
+  canvas.addEventListener('pointerup', () => {
+    isPointerDown = false;
+    showUITemporarily();
+  });
+  canvas.addEventListener('pointercancel', () => { isPointerDown = false; });
+
+  document.getElementById('btn-flip').addEventListener('click', () => {
+    flipGravity();
+    showUITemporarily();
+  });
+  document.getElementById('btn-mix').addEventListener('click', () => {
+    mixSand();
+    showUITemporarily();
+  });
+  document.getElementById('btn-tilt').addEventListener('click', async () => {
+    if (!orientationSupported) {
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+          const perm = await DeviceOrientationEvent.requestPermission();
+          if (perm === 'granted') {
+            orientationSupported = true;
+            tiltEnabled = true;
+            document.getElementById('btn-tilt').classList.add('active');
+            tiltStatus.textContent = 'Tilt: ON';
+          }
+        } catch {
+          tiltStatus.textContent = 'Tilt denied';
+        }
+      } else if (window.DeviceOrientationEvent) {
+        orientationSupported = true;
+        tiltEnabled = true;
+        document.getElementById('btn-tilt').classList.add('active');
+        tiltStatus.textContent = 'Tilt: ON';
+      } else {
+        tiltStatus.textContent = 'Tilt not supported';
+      }
+    } else {
+      tiltEnabled = !tiltEnabled;
+      document.getElementById('btn-tilt').classList.toggle('active', tiltEnabled);
+      tiltStatus.textContent = tiltEnabled ? 'Tilt: ON' : 'Tilt: OFF';
+      if (!tiltEnabled) gravity.set(0, -1, 0);
+    }
+    showUITemporarily();
+  });
+  document.getElementById('btn-palette').addEventListener('click', () => {
+    paletteIndex = (paletteIndex + 1) % palettes.length;
+    colors = palettes[paletteIndex];
+    for (let i = 0; i < particleCount; i++) {
+      colorIds[i] = colorIds[i] % colors.length;
+      setInstanceColor(i, colorIds[i]);
+    }
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    showUITemporarily();
+  });
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    gravity.set(0, -1, 0);
+    initSand();
+    showUITemporarily();
+  });
+
+  window.addEventListener('deviceorientation', e => {
+    if (!tiltEnabled || e.beta == null || e.gamma == null) return;
+    updateGravityFromTilt(e.beta, e.gamma);
+  });
+
+  window.addEventListener('keydown', e => {
+    if (e.key === 'f' || e.key === 'F') flipGravity();
+    if (e.key === 'm' || e.key === 'M') mixSand();
+    if (e.key === 'r' || e.key === 'R') { gravity.set(0, -1, 0); initSand(); }
+    if (e.key === 'c' || e.key === 'C' || e.key === 'p' || e.key === 'P') {
+      paletteIndex = (paletteIndex + 1) % palettes.length;
+      colors = palettes[paletteIndex];
+      for (let i = 0; i < particleCount; i++) {
+        colorIds[i] = colorIds[i] % colors.length;
+        setInstanceColor(i, colorIds[i]);
+      }
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    }
+    if (e.key === 'ArrowUp')    gravity.set(0, 1, 0);
+    if (e.key === 'ArrowDown')  gravity.set(0, -1, 0);
+    if (e.key === 'ArrowLeft')  gravity.set(-1, 0, 0);
+    if (e.key === 'ArrowRight') gravity.set(1, 0, 0);
+    showUITemporarily();
+  });
+
+  document.body.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+
+  setTimeout(() => hint.classList.add('fade'), 5500);
+  showUITemporarily();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  if (window.DeviceOrientationEvent &&
+      typeof DeviceOrientationEvent.requestPermission !== 'function') {
+    orientationSupported = true;
+  }
+
+  // ── Main loop ───────────────────────────────────────────────────
+  let frameCount = 0;
+  function loop() {
+    frameCount++;
+    updatePhysics();
+    controls.update();
+    renderer.render(scene, camera);
+    requestAnimationFrame(loop);
+  }
+
+  initSand();
+  requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
