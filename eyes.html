@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Full Screen Rotating Trees and Circles</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #000000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    initGrid();
+}
+window.addEventListener('resize', resize);
+
+const palette = ["#FF3366", "#FF9933", "#FFCC00", "#33CC66", "#3399FF", "#9933FF", "#FF33CC"];
+
+let time = 0;
+const fixedRadius = 120;
+const spacing = fixedRadius * 2.4;
+let gridCircles = [];
+
+function initGrid() {
+    gridCircles = [];
+    let startX = (canvas.width % spacing) / 2 - fixedRadius;
+    let startY = (canvas.height % spacing) / 2 - fixedRadius;
+
+    for (let x = startX; x < canvas.width + fixedRadius; x += spacing) {
+        for (let y = startY; y < canvas.height + fixedRadius; y += spacing) {
+            let spinDirection = Math.random() < 0.5 ? 1 : -1;
+            let phaseOffset = Math.random() * Math.PI * 2;
+            gridCircles.push({ x, y, spinDirection, phaseOffset });
+        }
+    }
+}
+
+resize();
+
+function drawTreeInCircle(centerX, centerY, spinDirection, phaseOffset) {
+    let currentRotation = phaseOffset + (time * 0.005 * spinDirection);
+
+    // Save canvas context to apply rotation to the entire unit (both circle and tree together)
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(currentRotation);
+
+    // 1. Draw fixed-size circle border in local rotated space
+    let totalSegments = 100;
+    for (let i = 0; i < totalSegments; i++) {
+        let t1 = (i / totalSegments) * Math.PI * 2;
+        let t2 = ((i + 1) / totalSegments) * Math.PI * 2;
+
+        let x1 = fixedRadius * Math.cos(t1);
+        let y1 = fixedRadius * Math.sin(t1);
+        let x2 = fixedRadius * Math.cos(t2);
+        let y2 = fixedRadius * Math.sin(t2);
+
+        let colorIdx = Math.floor((i + time * 0.05) % palette.length);
+        if (colorIdx < 0) colorIdx += palette.length;
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.strokeStyle = palette[colorIdx];
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+    }
+
+    // 2. Recursively grow a fractal tree inside the rotated local space
+    function drawBranch(x, y, angle, length, depth, branchIndex) {
+        if (depth === 0) return;
+
+        let sway = Math.sin(time * 0.003 + depth) * 0.03;
+        let xEnd = x + length * Math.cos(angle + sway);
+        let yEnd = y + length * Math.sin(angle + sway);
+
+        if (depth === 1) {
+            let angleToCenter = Math.atan2(yEnd, xEnd);
+            xEnd = fixedRadius * Math.cos(angleToCenter);
+            yEnd = fixedRadius * Math.sin(angleToCenter);
+        } else {
+            let distFromCenter = Math.hypot(xEnd, yEnd);
+            if (Math.abs(distFromCenter - fixedRadius) < 20) {
+                let angleToCenter = Math.atan2(yEnd, xEnd);
+                xEnd = fixedRadius * Math.cos(angleToCenter);
+                yEnd = fixedRadius * Math.sin(angleToCenter);
+            }
+        }
+
+        let colorIdx = Math.floor((depth * 2 + time * 0.03) % palette.length);
+        if (colorIdx < 0) colorIdx += palette.length;
+
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(xEnd, yEnd);
+        ctx.strokeStyle = palette[colorIdx];
+        ctx.lineWidth = Math.max(1, depth * 0.6);
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        let hitBoundary = Math.abs(Math.hypot(xEnd, yEnd) - fixedRadius) < 1.0;
+        if (!hitBoundary && depth > 1) {
+            let branchSpread = 0.45 + Math.sin(time * 0.001) * 0.03;
+            drawBranch(xEnd, yEnd, angle + branchSpread, length * 0.72, depth - 1, branchIndex * 2);
+            drawBranch(xEnd, yEnd, angle - branchSpread, length * 0.72, depth - 1, branchIndex * 2 + 1);
+        }
+    }
+
+    // Root starts at the bottom edge of the local rotated container
+    let rootX = 0;
+    let rootY = fixedRadius;
+    drawBranch(rootX, rootY, -Math.PI / 2, fixedRadius * 0.5, 5, 0);
+
+    // Restore canvas state for the next grid item
+    ctx.restore();
+}
+
+function draw() {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    for (let c of gridCircles) {
+        drawTreeInCircle(c.x, c.y, c.spinDirection, c.phaseOffset);
+    }
+
+    time += 1;
+    requestAnimationFrame(draw);
+}
+
+requestAnimationFrame(draw);
+</script>
+
+</body>
+</html>
