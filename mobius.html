@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Interactive Hyperspeed 3D Matrix Möbius Strip</title>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+            font-family: monospace;
+        }
+        canvas {
+            display: block;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #00ff66;
+            font-size: 14px;
+            pointer-events: none;
+            text-shadow: 0 0 8px #00ff66;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="info">
+        MÖBIUS LOOPS // SCROLL MOUSE WHEEL TO CHANGE SPEED<br>
+        CURRENT SPEED MULTIPLIER: <span id="speedVal">1.0</span>x
+    </div>
+    <canvas id="matrixCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('matrixCanvas');
+        const ctx = canvas.getContext('2d');
+        const speedDisplay = document.getElementById('speedVal');
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Speed control variables
+        let speedMultiplier = 1.0;
+
+        window.addEventListener('wheel', (e) => {
+            // Adjust speed multiplier based on scroll direction
+            if (e.deltaY < 0) {
+                speedMultiplier += 0.2; // Scroll up speeds up
+            } else {
+                speedMultiplier -= 0.2; // Scroll down slows down
+            }
+            // Clamp speed between a safe reverse and ultra-fast limits
+            speedMultiplier = Math.max(-10.0, Math.min(10.0, speedMultiplier));
+            speedDisplay.textContent = speedMultiplier.toFixed(1);
+        });
+
+        const mobiusLoops = [];
+        const numLoops = 40;
+        const chars = "01010101MÖBIUSLOOPXYZ";
+
+        class LetterMobiusLoop {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.xPos = (Math.random() - 0.5) * 10;
+                this.yPos = (Math.random() - 0.5) * 10;
+                this.zPos = Math.random() * 10 - 2;
+
+                this.rx = Math.random() * Math.PI * 2;
+                this.ry = Math.random() * Math.PI * 2;
+                this.rz = Math.random() * Math.PI * 2;
+                this.vrx = (Math.random() - 0.5) * 0.15;
+                this.vry = (Math.random() - 0.5) * 0.15;
+                this.vrz = (Math.random() - 0.5) * 0.15;
+
+                this.char = chars.charAt(Math.floor(Math.random() * chars.length));
+                this.colorState = Math.floor(Math.random() * 3);
+
+                this.numPoints = 20; 
+                this.localPoints = [];
+                
+                const R = 1.0; 
+                for (let i = 0; i < this.numPoints; i++) {
+                    let u = (i / this.numPoints) * Math.PI * 2;
+                    let v = (Math.sin(u * 3) * 0.35); 
+
+                    let lx = (R + v * Math.cos(u / 2)) * Math.cos(u);
+                    let ly = (R + v * Math.cos(u / 2)) * Math.sin(u);
+                    let lz = v * Math.sin(u / 2);
+
+                    this.localPoints.push({ x: lx, y: ly, z: lz });
+                }
+            }
+
+            update() {
+                // Scale rotation and movement ticks dynamically by the user-controlled speed multiplier
+                this.rx += this.vrx * speedMultiplier;
+                this.ry += this.vry * speedMultiplier;
+                this.rz += this.vrz * speedMultiplier;
+                
+                this.zPos -= 0.25 * speedMultiplier; 
+
+                // Handle looping boundaries depending on forward/backward travel direction
+                if (speedMultiplier >= 0) {
+                    if (this.zPos < -4) {
+                        this.reset();
+                        this.zPos = 6;
+                    } else if (this.zPos > 8) {
+                        this.reset();
+                        this.zPos = -4;
+                    }
+                } else {
+                    if (this.zPos > 6) {
+                        this.reset();
+                        this.zPos = -4;
+                    }
+                }
+            }
+
+            draw(ctx, cx, cy, scale) {
+                const cosX = Math.cos(this.rx), sinX = Math.sin(this.rx);
+                const cosY = Math.cos(this.ry), sinY = Math.sin(this.ry);
+                const cosZ = Math.cos(this.rz), sinZ = Math.sin(this.rz);
+
+                let projectedPoints = [];
+
+                for (let p of this.localPoints) {
+                    let y1 = p.y * cosX - p.z * sinX;
+                    let z1 = p.y * sinX + p.z * cosX;
+                    let x1 = p.x;
+
+                    let x2 = x1 * cosY + z1 * sinY;
+                    let z2 = -x1 * sinY + z1 * cosY;
+                    let y2 = y1;
+
+                    let x3 = x2 * cosZ - y2 * sinZ;
+                    let y3 = x2 * sinZ + y2 * cosZ;
+                    let z3 = z2;
+
+                    let wx = x3 + this.xPos;
+                    let wy = y3 + this.yPos;
+                    let wz = z3 + this.zPos;
+
+                    let distance = 4.0;
+                    let fov = distance / (distance + wz);
+                    if (fov < 0) continue;
+
+                    projectedPoints.push({
+                        x: cx + wx * scale * fov,
+                        y: cy + wy * scale * fov,
+                        z: wz
+                    });
+                }
+
+                if (this.colorState === 0) {
+                    ctx.fillStyle = '#0088ff'; 
+                } else if (this.colorState === 1) {
+                    ctx.fillStyle = '#ff0033'; 
+                } else {
+                    ctx.fillStyle = '#00ff66'; 
+                }
+
+                ctx.font = 'bold 16px monospace';
+                for (let pt of projectedPoints) {
+                    let alpha = (pt.z + 4) / 8;
+                    ctx.globalAlpha = Math.max(0.1, Math.min(1.0, alpha));
+                    ctx.fillText(this.char, pt.x, pt.y);
+                }
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        for (let i = 0; i < numLoops; i++) {
+            let m = new LetterMobiusLoop();
+            m.zPos = (Math.random() - 0.5) * 10;
+            mobiusLoops.push(m);
+        }
+
+        function animate() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const scale = Math.min(canvas.width, canvas.height) * 0.22;
+
+            mobiusLoops.sort((a, b) => {
+                let za = a.localPoints.reduce((acc, p) => acc + p.z, 0) + a.zPos * a.localPoints.length;
+                let zb = b.localPoints.reduce((acc, p) => acc + p.z, 0) + b.zPos * b.localPoints.length;
+                return za - zb;
+            });
+
+            for (let loop of mobiusLoops) {
+                loop.update();
+                loop.draw(ctx, cx, cy, scale);
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
